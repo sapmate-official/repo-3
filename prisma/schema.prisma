@@ -598,6 +598,7 @@ model OnboardingCandidate {
   id                String           @id @default(cuid())
   email             String           @unique
   businessEmail     String?
+  personalEmail     String?
   firstName         String
   lastName          String?
   mobileNumber      String?

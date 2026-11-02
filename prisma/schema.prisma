@@ -1,0 +1,960 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SuperAdmin {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  hashedPassword String
+  refreshToken   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Organization {
+  id                    String                 @id @default(cuid())
+  name                  String
+  industry              String?
+  logo                  String?
+  address               String?
+  timezone              String?                @default("UTC")
+  subscriptionStart     DateTime               @default(now())
+  subscriptionEnd       DateTime?
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  settings              Json?
+  subscriptionPlanId    String?
+  activityLogs          ActivityLog[]
+  billingRecords        BillingRecord[]
+  departments           Department[]
+  holidays              Holiday[]
+  holidayTypes          HolidayType[]
+  leaveTypes            LeaveType[]
+  notificationTemplates NotificationTemplate[]
+  onboardingCandidates  OnboardingCandidate[]
+  subscriptionPlan      SubscriptionPlan?      @relation(fields: [subscriptionPlanId], references: [id])
+  OrganizationSettings  OrganizationSettings[]
+  Organization_admin    Organization_admin[]
+  PermissionPreset      PermissionPreset[]
+  roles                 Role[]
+  users                 User[]
+  tasks                 Task[]
+  taskGroups            TaskGroup[]
+  birthdayEmailLogs     BirthdayEmailLog[]
+}
+
+model Organization_admin {
+  id           String       @id @default(cuid())
+  orgId        String
+  adminId      String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  admin_user   User         @relation(fields: [adminId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id])
+}
+
+model Department {
+  id                   String                @id @default(cuid())
+  orgId                String
+  name                 String
+  description          String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  budget               Float?
+  code                 String?
+  headId               String?
+  location             String?
+  parentId             String?
+  status               Boolean               @default(true)
+  departmentHead       User?                 @relation("DepartmentHead", fields: [headId], references: [id])
+  organization         Organization          @relation(fields: [orgId], references: [id])
+  parentDepartment     Department?           @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  subDepartments       Department[]          @relation("DepartmentHierarchy")
+  users                User[]                @relation("UserDepartment")
+  onboardingCandidates OnboardingCandidate[]
+  // NEW: Multi-department relations
+  userDepartments      UserDepartment[]
+
+  @@unique([orgId, name])
+  @@unique([orgId, code])
+}
+
+// NEW: Multi-department junction table
+model UserDepartment {
+  id           String   @id @default(cuid())
+  userId       String
+  departmentId String
+  isPrimary    Boolean  @default(false)
+  assignedAt   DateTime @default(now())
+  assignedBy   String?
+  role         String? // Role within this specific department
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  assignedByUser User?      @relation("DepartmentAssignments", fields: [assignedBy], references: [id])
+
+  @@unique([userId, departmentId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([isPrimary])
+}
+
+model Role {
+  id           String           @id @default(cuid())
+  orgId        String
+  name         String
+  description  String?
+  isDefault    Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  organization Organization     @relation(fields: [orgId], references: [id])
+  permissions  RolePermission[]
+  users        UserRole[]
+
+  @@unique([orgId, name])
+}
+
+model PermissionCategory {
+  id            String                  @id @default(cuid())
+  name          String                  @unique
+  description   String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  subcategories PermissionSubcategory[]
+}
+
+model PermissionSubcategory {
+  id          String             @id @default(cuid())
+  categoryId  String
+  name        String
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  permissions Permission[]
+  category    PermissionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, name])
+}
+
+model Permission {
+  id            String                 @id @default(cuid())
+  name          String
+  description   String?
+  module        String?
+  key           String?
+  action        String
+  createdAt     DateTime               @default(now())
+  subcategoryId String?
+  subcategory   PermissionSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  roles         RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime   @default(now())
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+model User {
+  id                           String                @id @default(cuid())
+  orgId                        String
+  departmentId                 String?
+  managerId                    String?
+  email                        String
+  hashedPassword               String?
+  refreshToken                 String?
+  status                       UserStatus            @default(active)
+  verificationToken            String?               @unique
+  verificationTokenExpiry      DateTime?
+  annualPackage                Float?                @default(0.0)
+  monthlySalary                Float?                @default(0.0)
+  hiredDate                    DateTime?             @default(now())
+  dateOfBirth                  DateTime?
+  address                      String?
+  adharNumber                  String?
+  panNumber                    String?
+  mobileNumber                 String?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  employeeId                   String                @unique @default(cuid())
+  terminationDate              DateTime?
+  jobTitle                     String?
+  businessEmail                String?
+  personalEmail                String?
+  firstName                    String?               @default("unknown")
+  lastName                     String?               @default("unknown")
+  emergencyContact             String?
+  twoFactorEnabled             Boolean               @default(false)
+  loginNotificationsEnabled    Boolean               @default(true)
+  activityLogs                 ActivityLog[]         @relation("ActivityActor")
+  targetedActivities           ActivityLog[]         @relation("ActivityTarget")
+  attendanceRecords            AttendanceRecord[]
+  bankDetails                  BankDetails?
+  createdOnboardingCandidates  OnboardingCandidate[] @relation("CreatedCandidates")
+  reviewedOnboardingCandidates OnboardingCandidate[] @relation("ReviewedCandidates")
+  managedCandidates            OnboardingCandidate[] @relation("CandidateManager")
+  Department                   Department[]          @relation("DepartmentHead")
+  leaveBalances                LeaveBalance[]
+  leaveRequests                LeaveRequest[]
+  notifications                Notification[]
+  Organization_admin           Organization_admin[]
+  PushSubscription             PushSubscription[]
+  salaryParameter              SalaryParameter?
+  salaryRecords                SalaryRecord[]
+  receivedTransactions         TransactionTable[]    @relation("ReceiverTransaction")
+  sentTransactions             TransactionTable[]    @relation("SenderTransaction")
+  department                   Department?           @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager                      User?                 @relation("UserManager", fields: [managerId], references: [id])
+  subordinates                 User[]                @relation("UserManager")
+  organization                 Organization          @relation(fields: [orgId], references: [id])
+  roles                        UserRole[]
+  // NEW: Multi-department relations
+  userDepartments              UserDepartment[]
+  assignedDepartments          UserDepartment[]      @relation("DepartmentAssignments")
+  // Task Management relations
+  createdTasks                 Task[]                @relation("TaskCreator")
+  createdTaskGroups            TaskGroup[]           @relation("TaskGroupCreator")
+  assignedTasks                TaskAssignment[]      @relation("TaskAssignee")
+  assignedToTasks              TaskAssignment[]      @relation("TaskAssigner")
+  taskUpdates                  TaskUpdate[]          @relation("TaskUpdater")
+  taskGroupMemberships         TaskGroupMember[]     @relation("TaskGroupMemberships")
+  addedGroupMembers            TaskGroupMember[]     @relation("TaskGroupMemberAdder")
+  // OTP and Session Management relations
+  emailOtpVerifications        EmailOtpVerification[]
+  tempLoginSessions            TempLoginSession[]
+  birthdayEmailLogs            BirthdayEmailLog[]
+
+  @@unique([orgId, email])
+  @@index([orgId, departmentId])
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  role      Role     @relation(fields: [roleId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model BankDetails {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  accountHolder String
+  accountNumber String
+  ifscCode      String
+  bankName      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model LeaveType {
+  id               String         @id @default(cuid())
+  orgId            String
+  name             String
+  description      String?
+  annualLimit      Int
+  requiresApproval Boolean        @default(true)
+  isPaid           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  carryForward     Boolean        @default(false)
+  maxCarryForward  Int            @default(0)
+  leaveBalances    LeaveBalance[]
+  leaveRequests    LeaveRequest[]
+  organization     Organization   @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+}
+
+model LeaveBalance {
+  id            String    @id @default(cuid())
+  userId        String
+  leaveTypeId   String
+  usedDays      Int       @default(0)
+  remainingDays Int
+  year          Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  carryForward  Int       @default(0)
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, leaveTypeId, year])
+}
+
+model LeaveRequest {
+  id                  String      @id @default(cuid())
+  userId              String
+  leaveTypeId         String
+  startDate           DateTime
+  endDate             DateTime
+  status              LeaveStatus @default(PENDING)
+  reason              String?
+  approvedBy          String?
+  approvedAt          DateTime?
+  rejectedReason      String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  attachments         Json?
+  numberOfDays        Float
+  contributedToSalary Json?
+  leaveType           LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  user                User        @relation(fields: [userId], references: [id])
+}
+
+model AttendanceRecord {
+  id                  String                        @id @default(cuid())
+  userId              String
+  date                DateTime                      @default(now())
+  sessionNumber       Int
+  checkInTime         DateTime
+  checkOutTime        DateTime?
+  checkInLocation     Json
+  checkOutLocation    Json?
+  status              AttendanceStatus              @default(PRESENT)
+  notes               String?
+  duration            Json?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  deviceInfo          String?
+  ipAddress           String?
+  verificationStatus  AttendanceVerificationStatus? @default(UNVERIFIED)
+  contributedToSalary Json?
+  verifiedAt          DateTime?
+  verifiedBy          String?
+  user                User                          @relation(fields: [userId], references: [id])
+  UserDailyReport     UserDailyReport[]
+
+  @@unique([userId, date, sessionNumber])
+  @@index([userId, date])
+}
+
+model SalaryParameter {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  hraPercentage        Float    @default(40)
+  daPercentage         Float    @default(10)
+  taPercentage         Float    @default(10)
+  pfPercentage         Float    @default(12)
+  taxPercentage        Float    @default(10)
+  insuranceFixed       Float    @default(1000)
+  additionalAllowances Json?
+  additionalDeductions Json?
+  user                 User     @relation(fields: [userId], references: [id])
+}
+
+model SalaryRecord {
+  id                 String                   @id @default(cuid())
+  userId             String
+  month              Int
+  year               Int
+  basicSalary        Float
+  tax                Float                    @default(0)
+  netSalary          Float
+  status             PayrollStatus            @default(PENDING)
+  processedAt        DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  allowances         Json?
+  paymentMode        String?
+  paymentRef         String?
+  remarks            String?
+  deductions         Json?
+  incentive          Float?
+  bonus              Float?
+  user               User                     @relation(fields: [userId], references: [id])
+  salaryTransactions salaryTransactionTable[]
+
+  @@unique([userId, month, year])
+  @@index([userId, year, month])
+}
+
+model NotificationTemplate {
+  id            String           @id @default(cuid())
+  orgId         String
+  name          String
+  type          NotificationType
+  subject       String
+  content       String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  variables     Json?
+  notifications Notification[]
+  organization  Organization     @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+}
+
+model Notification {
+  id         String               @id @default(cuid())
+  userId     String
+  templateId String
+  content    String
+  isRead     Boolean              @default(false)
+  createdAt  DateTime             @default(now())
+  metadata   Json?
+  readAt     DateTime?
+  template   NotificationTemplate @relation(fields: [templateId], references: [id])
+  user       User                 @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+}
+
+model BackgroundJob {
+  id           String    @id @default(cuid())
+  type         JobType
+  status       JobStatus @default(PENDING)
+  payload      Json
+  scheduledFor DateTime
+  completedAt  DateTime?
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(3)
+  priority     Int       @default(0)
+
+  @@index([status, scheduledFor])
+}
+
+model Holiday {
+  id           String       @id @default(cuid())
+  orgId        String
+  name         String
+  date         DateTime
+  description  String?
+  isOptional   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  type         String?
+  organization Organization @relation(fields: [orgId], references: [id])
+  holidayType  HolidayType? @relation(fields: [type], references: [id])
+
+  @@unique([orgId, date])
+}
+
+model HolidayType {
+  id           String       @id @default(cuid())
+  name         String
+  policy       String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  orgId        String
+  Holiday      Holiday[]
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+}
+
+model TransactionTable {
+  id                 String                   @id @default(cuid())
+  senderUserId       String
+  recieverUserId     String
+  amount             Float
+  type               String
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  bankTransactionId  String?
+  recieverDetails    User                     @relation("ReceiverTransaction", fields: [recieverUserId], references: [id])
+  senderDetails      User                     @relation("SenderTransaction", fields: [senderUserId], references: [id])
+  salaryTransactions salaryTransactionTable[]
+}
+
+model salaryTransactionTable {
+  transactionId  String
+  salaryRecordId String
+  id             String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  salaryRecord   SalaryRecord     @relation(fields: [salaryRecordId], references: [id])
+  transaction    TransactionTable @relation(fields: [transactionId], references: [id])
+
+  @@unique([transactionId, salaryRecordId])
+}
+
+model PushSubscription {
+  id             String   @id @default(cuid())
+  userId         String
+  endpoint       String   @unique
+  keys           Json
+  expirationTime Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model UserDailyReport {
+  id            String           @id @default(cuid())
+  attendanceId  String
+  reportContent Json
+  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([id, attendanceId])
+}
+
+model OrganizationSettings {
+  id           String       @id @default(cuid())
+  orgId        String
+  settings     Json
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  organization Organization @relation(fields: [orgId], references: [id])
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  description   String?
+  monthlyPrice  Float
+  annualPrice   Float
+  maxUsers      Int
+  features      Json?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  organizations Organization[]
+}
+
+model BillingRecord {
+  id               String        @id @default(cuid())
+  organizationId   String
+  month            Int
+  year             Int
+  activeUserCount  Int
+  pricePerUser     Float
+  totalAmount      Float
+  status           BillingStatus
+  billDate         DateTime
+  dueDate          DateTime
+  paidDate         DateTime?
+  paymentReference String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  organization     Organization  @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, month, year])
+  @@index([organizationId, status])
+  @@index([dueDate])
+}
+
+model PermissionPreset {
+  id           String       @id @default(cuid())
+  name         String
+  description  String?
+  orgId        String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  permissions  Json
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+}
+
+model ActivityLog {
+  id           String         @id @default(cuid())
+  orgId        String
+  actorId      String
+  targetId     String?
+  action       ActivityAction
+  entity       ActivityEntity
+  entityId     String
+  description  String
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime       @default(now())
+  actor        User           @relation("ActivityActor", fields: [actorId], references: [id])
+  organization Organization   @relation(fields: [orgId], references: [id])
+  target       User?          @relation("ActivityTarget", fields: [targetId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetId, createdAt])
+  @@index([action, createdAt])
+  @@index([entity, createdAt])
+}
+
+model OnboardingCandidate {
+  id                String           @id @default(cuid())
+  email             String           @unique
+  businessEmail     String?
+  firstName         String
+  lastName          String?
+  mobileNumber      String?
+  status            OnboardingStatus @default(INVITED)
+  formData          Json?
+  verificationToken String?
+  tokenExpiry       DateTime?
+  orgId             String
+  createdById       String
+  managerId         String? // Add manager assignment
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  formSubmittedAt   DateTime?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  rejectionReason   String?
+  departmentId      String?
+  annualPackage     Float?
+  monthlySalary     Float? // Add monthly salary field
+  hiredDate         DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdBy    User         @relation("CreatedCandidates", fields: [createdById], references: [id])
+  reviewedBy   User?        @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
+  manager      User?        @relation("CandidateManager", fields: [managerId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  @@index([orgId])
+  @@index([verificationToken])
+}
+
+model Task {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  priority        TaskPriority   @default(MEDIUM)
+  status          TaskStatus     @default(PENDING)
+  dueDate         DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdById     String
+  orgId           String
+  groupId         String?
+  estimatedHours  Float?
+  tags            String[]
+  attachments     Json?
+  
+  createdBy       User           @relation("TaskCreator", fields: [createdById], references: [id])
+  organization    Organization   @relation(fields: [orgId], references: [id])
+  group           TaskGroup?     @relation(fields: [groupId], references: [id])
+  assignments     TaskAssignment[]
+  updates         TaskUpdate[]
+  
+  @@index([orgId, status])
+  @@index([createdById])
+  @@index([dueDate])
+}
+
+model TaskGroup {
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  orgId           String
+  createdById     String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  organization    Organization   @relation(fields: [orgId], references: [id])
+  createdBy       User           @relation("TaskGroupCreator", fields: [createdById], references: [id])
+  tasks           Task[]
+  members         TaskGroupMember[]
+  
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model TaskGroupMember {
+  id              String         @id @default(cuid())
+  groupId         String
+  userId          String
+  role            GroupRole      @default(MEMBER)
+  addedById       String
+  addedAt         DateTime       @default(now())
+  removedAt       DateTime?
+  isActive        Boolean        @default(true)
+  
+  group           TaskGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user            User           @relation("TaskGroupMemberships", fields: [userId], references: [id])
+  addedBy         User           @relation("TaskGroupMemberAdder", fields: [addedById], references: [id])
+  
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId])
+  @@index([isActive])
+}
+
+model TaskAssignment {
+  id              String         @id @default(cuid())
+  taskId          String
+  assignedToId    String
+  assignedById    String
+  assignedAt      DateTime       @default(now())
+  status          AssignmentStatus @default(ASSIGNED)
+  acceptedAt      DateTime?
+  completedAt     DateTime?
+  remarks         String?
+  
+  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignedTo      User           @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedBy      User           @relation("TaskAssigner", fields: [assignedById], references: [id])
+  
+  @@unique([taskId, assignedToId])
+  @@index([assignedToId, status])
+  @@index([taskId])
+}
+
+model TaskUpdate {
+  id              String         @id @default(cuid())
+  taskId          String
+  updatedById     String
+  updateType      UpdateType
+  message         String
+  attachments     Json?
+  progress        Int?
+  createdAt       DateTime       @default(now())
+  metadata        Json?
+  
+  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  updatedBy       User           @relation("TaskUpdater", fields: [updatedById], references: [id])
+  
+  @@index([taskId, createdAt])
+  @@index([updatedById])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum UpdateType {
+  STATUS_CHANGE
+  PROGRESS_UPDATE
+  COMMENT
+  ATTACHMENT
+  COMPLETION
+  REJECTION
+}
+
+enum BillingStatus {
+  UNPAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LATE
+  EARLY_DEPARTURE
+}
+
+enum PayrollStatus {
+  PENDING
+  PROCESSED
+  PAID
+  FAILED
+  PROCESSING
+}
+
+enum NotificationType {
+  EMAIL
+  PUSH
+  IN_APP
+}
+
+enum JobType {
+  PAYROLL_PROCESSING
+  LEAVE_BALANCE_UPDATE
+  NOTIFICATION_DISPATCH
+  ATTENDANCE_REPORT
+  DATA_BACKUP
+  SYSTEM_MAINTENANCE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AttendanceVerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  REJECTED
+}
+
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ASSIGN
+  UNASSIGN
+  APPROVE
+  REJECT
+  ACTIVATE
+  DEACTIVATE
+  RESET_PASSWORD
+  CHANGE_ROLE
+  CHANGE_DEPARTMENT
+  CHANGE_MANAGER
+  CHECK_IN
+  CHECK_OUT
+  APPLY_LEAVE
+  CANCEL_LEAVE
+  GENERATE_SALARY
+  PROCESS_PAYMENT
+  VERIFY_ATTENDANCE
+  SEND_NOTIFICATION
+  UPLOAD_DOCUMENT
+  VIEW_SENSITIVE_DATA
+  ABORT
+  ASSIGN_TASK
+  COMPLETE_TASK
+  UPDATE_TASK
+  REJECT_TASK
+  ACCEPT_TASK
+}
+
+enum ActivityEntity {
+  USER
+  ORGANIZATION
+  DEPARTMENT
+  USER_DEPARTMENT
+  ROLE
+  PERMISSION
+  ATTENDANCE
+  LEAVE_REQUEST
+  SALARY_RECORD
+  BANK_DETAILS
+  NOTIFICATION
+  DOCUMENT
+  SETTINGS
+  ONBOARDING_CANDIDATE
+  TASK
+  TASK_GROUP
+  TASK_ASSIGNMENT
+  TASK_UPDATE
+}
+
+enum OnboardingStatus {
+  INVITED
+  FORM_SUBMITTED
+  UNDER_REVIEW
+  REJECTED
+  APPROVED
+  ONBOARDED
+  ABORTED
+}
+
+model EmailOtpVerification {
+  id            String   @id @default(cuid())
+  userId        String
+  otpCode       String
+  purpose       OtpPurpose
+  expiresAt     DateTime
+  isUsed        Boolean  @default(false)
+  attemptsCount Int      @default(0)
+  maxAttempts   Int      @default(3)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  usedAt        DateTime?
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, purpose])
+  @@index([otpCode, expiresAt, isUsed])
+}
+
+model TempLoginSession {
+  id            String   @id @default(cuid())
+  sessionToken  String   @unique
+  userId        String
+  expiresAt     DateTime
+  isUsed        Boolean  @default(false)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionToken, expiresAt, isUsed])
+}
+
+enum OtpPurpose {
+  LOGIN
+  PASSWORD_RESET
+  ACCOUNT_VERIFICATION
+}
+
+model BirthdayEmailLog {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  sentDate       DateTime
+  emailSent      Boolean      @default(false)
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, sentDate])
+  @@index([organizationId, sentDate])
+  @@index([sentDate, emailSent])
+}

@@ -5,9 +5,9 @@ export const requireOrgScope = (
   paramName: string = 'orgId'
 ) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user) {
+    if (!req.user || !req.user.orgId) {
       res.status(401).json({
-        error: 'Authentication required.',
+        error: 'Authentication and active organization context required.',
         code: 'UNAUTHENTICATED'
       });
       return;

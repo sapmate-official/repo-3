@@ -1,7 +1,7 @@
 export interface AuthenticatedUser {
   id: string;
   email: string;
-  orgId: string;
+  orgId?: string;
   firstName?: string | null;
   lastName?: string | null;
   roles: string[];

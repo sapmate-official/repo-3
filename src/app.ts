@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { v1Router } from './routes/v1.js';
 
 export const createApp = (): Express => {
   const app = express();
@@ -48,7 +49,10 @@ export const createApp = (): Express => {
     });
   });
 
-  // 6. Central Error Handler (registered last)
+  // 6. API Routes
+  app.use('/api/v1', v1Router);
+
+  // 7. Central Error Handler (registered last)
   app.use(errorHandler);
 
   return app;

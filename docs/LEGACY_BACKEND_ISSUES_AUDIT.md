@@ -419,8 +419,8 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
   The frontend configuration points authentication routes (`AuthContext.tsx`) to `VITE_BACKEND_DOMAIN` (`http://localhost:5001`), while business endpoints in `APIDictionary` point to `legacyBackendDomain` (`http://localhost:3000`).
 - **Impact**:
   When a user logs in via `http://localhost:5001`, the JWT tokens and session cookies are signed with the TS backend's keys. When subsequent dashboard or module queries hit `http://localhost:3000`, the legacy backend rejects the tokens as invalid or unauthenticated, causing intermittent 401s, 404s, or total loss of session state.
-- **Legacy Status**: ⚠️ Open
-- **TypeScript Backend Status**: ⏳ In progress (Complete phase-by-phase migration of endpoints into `alkaa-backend-ts` so the frontend points exclusively to `VITE_BACKEND_DOMAIN`).
+- **Legacy Status**: ⚠️ Open (Split between ports 3000 and 5001)
+- **TypeScript Backend Status**: ✅ Resolved (Auth, Organization, Department, Employee, and Onboarding modules are fully consolidated in `alkaa-backend-ts` on port 5001. `Alkaa-frontend/src/services/api/v2/APIdict.ts` was updated to route all these endpoints to `backendDomain` with backward-compatible `/api/v1` and `/api/v2` routes).
 
 ---
 

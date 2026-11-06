@@ -382,4 +382,97 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 
 ---
 
-*This document will be continuously updated as further modules (Payroll, Attendance, Onboarding, Notifications, Settings) are audited and migrated.*
+## 🏛️ Strategic Upgrade Blueprint: Dashboard, Employee Management & Onboarding
+
+### 1. Frontend Repository Strategy: Keep `Alkaa-frontend` (Single Codebase)
+- **Decision**: Do **NOT** create a second frontend repository.
+- **Rationale**:
+  - Unlike the legacy backend (which was un-typed JavaScript with severe security flaws and an outdated database setup), `Alkaa-frontend` is **already built on a modern, robust stack**: React 18, TypeScript, Vite, Tailwind CSS, Radix UI / Shadcn UI primitives, TanStack Query v5, Jotai, and Lucide React.
+  - Recreating the frontend from scratch would mean rebuilding 30+ UI primitives, routing maps, auth contexts, Ola Maps SDK integration, PDF generators, and 80+ existing working screens (Attendance, Leaves, Holidays, Roles, Billing).
+- **Execution Strategy**:
+  1. **Git Isolation**: Develop enhancements on a dedicated branch (`feature/advanced-hrms-dashboard`) so `main` remains 100% production-ready.
+  2. **Non-Destructive Side-by-Side Upgrades**: Build the advanced views as modern modular components without breaking legacy paths.
+  3. **Backend Switching**: Seamlessly toggle between legacy (`http://localhost:3000`) and TypeScript backend (`http://localhost:5001`) via `VITE_BACKEND_DOMAIN` in `.env.local`.
+
+---
+
+### 2. Modern Role-Adaptive Dashboard Blueprint
+The current `Home.tsx` is monolithic and static. The upgraded architecture splits into **three role-tailored viewports**:
+
+#### A. Executive & Organization Admin Viewport
+- **Real-Time KPI Cards**:
+  - Headcount metrics (Active, In Probation, On Notice, Total).
+  - Monthly payroll burn & salary run status.
+  - Onboarding pipeline throughput (Candidates in review vs. provisioned).
+  - Today's organization attendance rate (% present, absent, on leave).
+- **Interactive Visual Analytics**:
+  - Department headcount & expenditure distribution (Donut chart).
+  - 30-day attendance trends and leave utilization patterns (Area/Line chart).
+- **Unified Action Center**:
+  - Pending onboarding submissions awaiting document verification.
+  - Pending leave escalations and attendance regularization requests.
+  - Upcoming employee work anniversaries and contract renewals.
+
+#### B. Department Manager Viewport
+- **Team Presence Matrix**: Live real-time dashboard of who is in the office, remote, or on leave today.
+- **1-Click Approvals**: Inline approval/rejection drawer for team leave requests and attendance corrections.
+- **Team Shift & Capacity Tracker**: Visual weekly calendar showing shift coverage across direct reports.
+
+#### C. Employee Self-Service Viewport
+- **Live Shift & Punch Clock**:
+  - Real-time elapsed time counter with start/stop shift buttons.
+  - Weekly tracked hours progress bar against target work hours.
+- **Leave Balance Wallet**: Visual cards displaying remaining balances for Casual Leave, Sick Leave, and Earned Leave with an instant "Apply Leave" modal.
+- **Payslip Quick-Access**: One-click download of the latest processed payslip PDF.
+- **Team Out Today**: Collapsible widget showing teammates on approved leave to avoid scheduling conflicts.
+
+---
+
+### 3. Enterprise Employee Management Hub Blueprint
+Transforms `EmployeeManagement.tsx` from an in-memory filtered list into an enterprise-grade workforce directory:
+
+#### A. High-Performance DataGrid
+- **Server-Side Architecture**:
+  - Fast paginated endpoint: `GET /api/v1/employees?page=1&limit=20&sortBy=hiredDate&order=desc`.
+  - Multi-faceted filters: Department, Role, Employment Status (`Active`, `Probation`, `Notice Period`, `Terminated`), and Manager.
+- **Batch Operations**: Bulk department assignment, status updates, and 1-click export to Excel / CSV.
+
+#### B. Comprehensive 7-Tab Employee Profile Drawer
+1. **Overview & Org Hierarchy**: Personal details, emergency contacts, job title, reporting manager, and direct subordinates.
+2. **Compensation & Payroll Structure**: Structured CTC breakdown (Basic, HRA, Special Allowances, PF deduction, Professional Tax, Net take-home pay).
+3. **Bank & Statutory Details**: Bank account, IFSC, PAN number, Aadhaar number, and PF UAN with verification audit tags.
+4. **Document Vault**: Uploaded PDFs/images (Aadhaar, PAN, offer letters, degree certificates) with inline thumbnail preview, verification status badges, and secure download.
+5. **Leave & Attendance Ledger**: Real-time balance ledger, historical attendance records, and overtime tracking.
+6. **Company Assets**: Assigned hardware (laptops, monitors, serial numbers) and software license allocations.
+7. **Career Milestones & Timeline**: Visual activity trail of joining date, promotions, department transfers, and compensation revisions.
+
+---
+
+### 4. Interactive Onboarding Pipeline Blueprint
+Replaces the flat table in `OnboardingManagement.tsx` with a multi-stage workflow:
+
+#### A. Visual Kanban Pipeline
+- **Stages**:
+  `1. Invited` ➔ `2. Draft In Progress` ➔ `3. Form Submitted` ➔ `4. Document Verification` ➔ `5. Approved` ➔ `6. Employee Provisioned`.
+- Drag-and-drop or 1-click stage advancement with automated candidate notification emails at each milestone.
+
+#### B. Granular Asset-Level Document Review
+- Admins can inspect each submitted document (Govt ID, educational degree, previous experience letter) individually.
+- **Actions per Document**:
+  - `[ ✅ Verify Document ]`
+  - `[ ⚠️ Request Re-upload ]` with an inline reason/comment (e.g., *"Aadhaar card scan is blurry; please upload a clear colored copy"*).
+  - Sends an instant email notification to the candidate with a secure link to re-upload only the flagged document without resetting the entire form.
+
+#### C. Role-Based Onboarding Checklists & Automated Provisioning
+- **Customizable Checklists**: Assign department-specific tasks (e.g., Software Engineering: GitHub + AWS invite; Sales: CRM setup).
+- **1-Click Atomic Employee Creation**:
+  - Generates the `User` record with secure cryptographically random credentials.
+  - Automatically provisions the business email address.
+  - Connects designated department, reporting manager, and RBAC roles.
+  - Automatically initializes leave balance ledger according to company policy.
+  - Dispatches an automated onboarding welcome package email with login credentials.
+
+---
+
+*This document is continuously updated as backend modules and frontend interfaces are designed, audited, and deployed.*
+

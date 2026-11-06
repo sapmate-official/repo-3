@@ -186,7 +186,9 @@ export class AuthService {
             firstName: superAdmin.name,
             isSuperAdmin: true,
             superAdmin: true,
-            status: 'active'
+            status: 'active',
+            roles: ['SUPER_ADMIN'],
+            permissions: ['*']
           }
         }
       };
@@ -298,18 +300,20 @@ export class AuthService {
       meta
     );
 
-    const roles: string[] = [];
-    const permissions: string[] = [];
+    const rolesSet = new Set<string>();
+    const permissionsSet = new Set<string>();
     for (const userRole of user.roles) {
       if (userRole.role?.name) {
-        roles.push(userRole.role.name);
+        rolesSet.add(userRole.role.name);
       }
       for (const rolePermission of userRole.role?.permissions || []) {
         if (rolePermission.permission?.key) {
-          permissions.push(rolePermission.permission.key);
+          permissionsSet.add(rolePermission.permission.key);
         }
       }
     }
+    const roles = Array.from(rolesSet);
+    const permissions = Array.from(permissionsSet);
 
     return {
       tokens,
@@ -473,18 +477,20 @@ export class AuthService {
       meta
     );
 
-    const roles: string[] = [];
-    const permissions: string[] = [];
+    const rolesSet = new Set<string>();
+    const permissionsSet = new Set<string>();
     for (const userRole of user.roles) {
       if (userRole.role?.name) {
-        roles.push(userRole.role.name);
+        rolesSet.add(userRole.role.name);
       }
       for (const rolePermission of userRole.role?.permissions || []) {
         if (rolePermission.permission?.key) {
-          permissions.push(rolePermission.permission.key);
+          permissionsSet.add(rolePermission.permission.key);
         }
       }
     }
+    const roles = Array.from(rolesSet);
+    const permissions = Array.from(permissionsSet);
 
     return {
       tokens,
@@ -666,8 +672,12 @@ export class AuthService {
         id: superAdmin.id,
         email: superAdmin.email,
         name: superAdmin.name,
+        firstName: superAdmin.name,
         superAdmin: true,
-        isSuperAdmin: true
+        isSuperAdmin: true,
+        status: 'active',
+        roles: ['SUPER_ADMIN'],
+        permissions: ['*']
       };
     }
 
@@ -725,18 +735,20 @@ export class AuthService {
       throw new AppError('Organization is inactive.', 403, 'ORGANIZATION_INACTIVE');
     }
 
-    const roles: string[] = [];
-    const permissions: string[] = [];
+    const rolesSet = new Set<string>();
+    const permissionsSet = new Set<string>();
     for (const userRole of user.roles) {
       if (userRole.role?.name) {
-        roles.push(userRole.role.name);
+        rolesSet.add(userRole.role.name);
       }
       for (const rolePermission of userRole.role?.permissions || []) {
         if (rolePermission.permission?.key) {
-          permissions.push(rolePermission.permission.key);
+          permissionsSet.add(rolePermission.permission.key);
         }
       }
     }
+    const roles = Array.from(rolesSet);
+    const permissions = Array.from(permissionsSet);
 
     return {
       id: user.id,

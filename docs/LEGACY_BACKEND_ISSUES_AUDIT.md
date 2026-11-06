@@ -382,6 +382,76 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 
 ---
 
+### Category 6: Session Hydration, Permissions & Routing Desynchronization
+
+#### `ISSUE-AUTH-005` · Permission Hydration Drop in Legacy `validatetoken`
+- **Severity**: 🔴 CRITICAL
+- **Location**:
+  - `alkaa-backend/src/controller/v1/general/general.controller.js` (Lines 751–760)
+  - `Alkaa-frontend/src/providers/AuthContext.tsx` (Lines 175–179)
+- **Description**:
+  The legacy `validatetoken` endpoint queries user roles with:
+  ```javascript
+  roles: {
+    include: {
+      role: {
+        select: { id: true, name: true }
+      }
+    }
+  }
+  ```
+  It completely omits `role.permissions`. Consequently, `response.data.user.permissions` is `undefined`. When the frontend executes `setPermissionList(toPermissionList(response.data.user.permissions))`, `permissionListAtom` is reset to an empty array (`[]`).
+- **Impact**:
+  1. **Sidebar Collapses**: The left navigation bar hides all modules (Employees, Onboarding, Leave, Attendance, Department, Roles), showing only "Dashboard" and "Logout".
+  2. **False Unauthorized Access**: Every permission-guarded route (e.g. `/p/organization`, `/p/employee`, `/p/onboarding`) renders the *"Unauthorized Access - Missing Permissions"* screen even for valid `Org_Admin` users.
+- **Legacy Status**: ⚠️ Open (Broken permission hydration)
+- **TypeScript Backend Status**: ✅ Resolved (`AuthService.getUserProfile` in `alkaa-backend-ts` traverses all attached roles, dedupes permission keys, and returns a comprehensive `permissions: string[]` array).
+
+---
+
+#### `ISSUE-AUTH-006` · Dual-Domain Frontend API Split & JWT Cookie Desynchronization
+- **Severity**: 🔴 CRITICAL
+- **Location**:
+  - `Alkaa-frontend/src/constants/Domain.ts` (Lines 1–14)
+  - `Alkaa-frontend/src/services/api/v2/APIdict.ts` (Lines 1–65)
+  - `Alkaa-frontend/.env.local`
+- **Description**:
+  The frontend configuration points authentication routes (`AuthContext.tsx`) to `VITE_BACKEND_DOMAIN` (`http://localhost:5001`), while business endpoints in `APIDictionary` point to `legacyBackendDomain` (`http://localhost:3000`).
+- **Impact**:
+  When a user logs in via `http://localhost:5001`, the JWT tokens and session cookies are signed with the TS backend's keys. When subsequent dashboard or module queries hit `http://localhost:3000`, the legacy backend rejects the tokens as invalid or unauthenticated, causing intermittent 401s, 404s, or total loss of session state.
+- **Legacy Status**: ⚠️ Open
+- **TypeScript Backend Status**: ⏳ In progress (Complete phase-by-phase migration of endpoints into `alkaa-backend-ts` so the frontend points exclusively to `VITE_BACKEND_DOMAIN`).
+
+---
+
+#### `ISSUE-AUTH-007` · Single-Role Assumption Drops Secondary Permissions (`roles[0]` Pattern)
+- **Severity**: 🟠 HIGH
+- **Location**:
+  - `Alkaa-frontend/src/pages/private/system/EmployeeManagementSystem/EmployeeManagement.tsx`
+  - Legacy `App.tsx` / `AuthContext.tsx`
+- **Description**:
+  Multiple frontend views access permissions using `data?.user?.roles[0]?.role?.permissions`, assuming a user only ever has one role. When an employee is assigned multiple roles (e.g. `Employee1` + `Org_Admin`), all permissions belonging to the second role are dropped if `Employee1` is listed first.
+- **Impact**:
+  Org Admins who also have an Employee role lose access to administrative screens if their primary array entry is `Employee1`.
+- **Legacy Status**: ⚠️ Open
+- **TypeScript Backend Status**: ✅ Resolved (`getUserProfile` aggregates and unions permissions across *all* assigned roles into a single flattened array).
+
+---
+
+#### `ISSUE-SA-005` · SuperAdmin Direct Navigation Downgrade & Unauthorized Screen
+- **Severity**: 🟠 HIGH
+- **Location**:
+  - `Alkaa-frontend/src/App.tsx` (Lines 86, 103, 176–180)
+- **Description**:
+  When a user navigates directly to `http://localhost:5174/p/organization`:
+  1. If `isSuperAdmin` evaluates to `false` (or before token validation completes), `ProtectedRoute` renders `ClientRoute` instead of `SuperAdminRoute`.
+  2. In `ClientRoute`, `/organization/*` is mapped to `ClientOrganizationModule` wrapped with `PermissionRouteBasedOnKey`.
+  3. Because SuperAdmins do not belong to a tenant organization and do not have tenant permission rows, `hasPermission` evaluates to `false`, displaying the *"Unauthorized Access - Missing Permissions: view_organization_basic_details..."* error screen instead of redirecting to the SuperAdmin organization list.
+- **Legacy Status**: ⚠️ Open
+- **TypeScript Backend Status**: ✅ Resolved (`superAdminAuth.ts` and `organization.router.ts` in TS backend strictly differentiate SuperAdmin organization management from tenant organization profile routes).
+
+---
+
 ## 🏛️ Strategic Upgrade Blueprint: Dashboard, Employee Management & Onboarding
 
 ### 1. Frontend Repository Strategy: Keep `Alkaa-frontend` (Single Codebase)

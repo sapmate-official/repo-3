@@ -7,6 +7,7 @@ import { requestIdMiddleware } from './middleware/requestId.js';
 import { requireTrustedOrigin } from './middleware/trustedOrigin.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { v1Router } from './routes/v1.js';
+import { v2Router } from './routes/v2.js';
 import { AppError } from './util/errors.js';
 
 const trustProxyValue = (): boolean | number | string => {
@@ -77,6 +78,7 @@ export const createApp = (): Express => {
 
   // 6. API Routes (state-changing requests must come from a trusted origin)
   app.use('/api/v1', requireTrustedOrigin, v1Router);
+  app.use('/api/v2', requireTrustedOrigin, v2Router);
 
   // 7. Central Error Handler (registered last)
   app.use(errorHandler);

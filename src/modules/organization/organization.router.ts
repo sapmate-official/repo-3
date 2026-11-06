@@ -31,9 +31,11 @@ organizationRouter.post(
   OrganizationController.create
 );
 
+// Organization details: accessible to super-admins and members of the organization
 organizationRouter.get(
   '/:orgId',
-  authenticateSuperAdmin,
+  authenticateAny,
+  requireOrgScope('orgId'),
   validate({ params: orgIdParamsSchema }),
   OrganizationController.get
 );

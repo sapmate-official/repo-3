@@ -5,9 +5,13 @@ import { organizationRouter } from '../modules/organization/organization.router.
 import { departmentRouter } from '../modules/department/department.router.js';
 import { employeeRouter } from '../modules/employee/employee.router.js';
 import { onboardingRouter } from '../modules/onboarding/onboarding.router.js';
+import { publicRouter } from '../modules/public/public.router.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
 export const v1Router = Router();
+
+// Public routes (no auth required)
+v1Router.use('/public', publicRouter);
 
 // Mount auth module under both /general (100% frontend backward compatible) and /auth
 v1Router.use('/general', authRouter);

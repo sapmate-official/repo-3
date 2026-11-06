@@ -4,6 +4,7 @@ import { organizationRouter } from '../modules/organization/organization.router.
 import { departmentRouter } from '../modules/department/department.router.js';
 import { employeeRouter } from '../modules/employee/employee.router.js';
 import { onboardingRouter } from '../modules/onboarding/onboarding.router.js';
+import { publicRouter } from '../modules/public/public.router.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
 export const v2Router = Router();
@@ -11,6 +12,9 @@ export const v2Router = Router();
 // ==========================================
 // Compatibility Routes for Legacy Frontend (v2)
 // ==========================================
+
+// Public endpoints (no auth required)
+v2Router.use('/public', publicRouter);
 
 // Organization endpoints
 v2Router.get('/organization/employee-list/:orgId', authenticateAny, EmployeeController.listLegacy);

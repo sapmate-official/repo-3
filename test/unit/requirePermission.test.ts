@@ -26,6 +26,15 @@ describe('requirePermission', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('allows super-admins regardless of roles or permissions', () => {
+    const { next } = invoke(requirePermission('view_salary'), {
+      roles: ['SUPER_ADMIN'],
+      permissions: [],
+      isSuperAdmin: true
+    });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   it('allows the default Org_Admin role', () => {
     const { next } = invoke(requirePermission('view_salary'), {
       roles: ['Org_Admin'],

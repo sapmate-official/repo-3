@@ -14,6 +14,12 @@ export const requirePermission = (
       return;
     }
 
+    // Platform super-admins are not scoped to an organization and hold all permissions.
+    if (req.user.isSuperAdmin) {
+      next();
+      return;
+    }
+
     // Org_Admin role bypasses individual permission checks for convenience
     const hasAllowedRole = req.user.roles.some(r => allowedRoles.includes(r));
     if (hasAllowedRole) {

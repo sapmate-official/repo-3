@@ -14,6 +14,12 @@ export const requireOrgScope = (paramName = 'orgId') => {
       return;
     }
 
+    // Platform super-admins may operate across tenant boundaries.
+    if (req.user.isSuperAdmin) {
+      next();
+      return;
+    }
+
     const body = req.body as Record<string, unknown> | undefined;
     const query = req.query as Record<string, unknown> | undefined;
     const requestedOrgId =

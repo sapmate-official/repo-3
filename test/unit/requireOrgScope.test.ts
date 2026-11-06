@@ -49,6 +49,13 @@ describe('requireOrgScope', () => {
     expect(res.body.orgId).toBe('org-a');
   });
 
+  it('allows super-admins to access any organization', async () => {
+    const superAdmin = { ...user, orgId: 'platform-superadmin', isSuperAdmin: true };
+    const res = await request(buildApp(superAdmin)).get('/orgs/org-b/items');
+    expect(res.status).toBe(200);
+    expect(res.body.orgId).toBe('org-b');
+  });
+
   it('rejects a mismatched organization id', async () => {
     const res = await request(buildApp(user)).get('/orgs/org-b/items');
     expect(res.status).toBe(403);

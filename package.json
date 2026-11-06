@@ -16,7 +16,9 @@
     "test:e2e": "vitest run test/e2e",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy"
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:status": "prisma migrate status"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

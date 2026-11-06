@@ -1,10 +1,35 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { type Prisma } from '@prisma/client';
 import { env } from '../../config/env.js';
 import prisma from '../../db/prisma.js';
 import { logger } from '../../config/logger.js';
+import { AppError } from '../../util/errors.js';
 import {
+  hashPassword,
+  needsRehash,
+  verifyAgainstDummyHash,
+  verifyPassword as verifyPasswordHash
+} from '../../util/password.js';
+import {
+  hashOtp,
+  otpMatches,
+  verificationTokenCandidates,
+  verificationTokenMatches
+} from '../../util/tokenHash.js';
+import { parseDurationMs } from '../../util/ttl.js';
+import {
+  createSuperAdminSession,
+  createUserSession,
+  revokeSuperAdminSessions,
+  revokeUserSessions,
+  revokeUserSessionsInTransaction,
+  rotateSuperAdminSession,
+  rotateUserSession,
+  type SessionMeta
+} from './authSession.service.js';
+import { verifySuperAdminRefreshToken } from './token.service.js';
+import type {
   CheckEmailResponse,
   LoginSuccessResponse,
   LoginOtpRequiredResponse,
@@ -12,71 +37,31 @@ import {
   UserSummaryDTO
 } from './auth.types.js';
 
-interface DecodedTokenPayload {
-  id: string;
-  email: string;
-  orgId?: string;
-  typ?: string;
-}
+const emailMatch = (normalizedEmail: string): Prisma.UserWhereInput => ({
+  OR: [
+    { email: normalizedEmail },
+    { businessEmail: normalizedEmail },
+    { personalEmail: normalizedEmail }
+  ]
+});
+
+const invalidCredentials = (): AppError =>
+  new AppError('Invalid email or password.', 401, 'INVALID_CREDENTIALS');
+
+const displayName = (
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  fallback: string
+): string => {
+  const name = `${firstName ?? ''} ${lastName ?? ''}`.trim();
+  return name.length > 0 ? name : fallback;
+};
 
 export class AuthService {
-  // Generate JWT tokens for standard organization users
-  static generateUserTokens(payload: { id: string; email: string; orgId: string }): TokenPair {
-    const accessToken = jwt.sign(
-      {
-        id: payload.id,
-        email: payload.email,
-        orgId: payload.orgId,
-        typ: 'user'
-      },
-      env.USER_ACCESS_TOKEN_SECRET,
-      { expiresIn: env.ACCESS_TOKEN_TTL as jwt.SignOptions['expiresIn'] }
-    );
-
-    const refreshToken = jwt.sign(
-      {
-        id: payload.id,
-        email: payload.email,
-        orgId: payload.orgId,
-        typ: 'user'
-      },
-      env.USER_REFRESH_TOKEN_SECRET,
-      { expiresIn: env.REFRESH_TOKEN_TTL as jwt.SignOptions['expiresIn'] }
-    );
-
-    return { accessToken, refreshToken };
-  }
-
-  // Generate JWT tokens for platform super administrators
-  static generateSuperAdminTokens(payload: { id: string; email: string }): TokenPair {
-    const accessToken = jwt.sign(
-      {
-        id: payload.id,
-        email: payload.email,
-        typ: 'super_admin'
-      },
-      env.SUPER_ADMIN_ACCESS_TOKEN_SECRET,
-      { expiresIn: env.ACCESS_TOKEN_TTL as jwt.SignOptions['expiresIn'] }
-    );
-
-    const refreshToken = jwt.sign(
-      {
-        id: payload.id,
-        email: payload.email,
-        typ: 'super_admin'
-      },
-      env.SUPER_ADMIN_REFRESH_TOKEN_SECRET,
-      { expiresIn: env.REFRESH_TOKEN_TTL as jwt.SignOptions['expiresIn'] }
-    );
-
-    return { accessToken, refreshToken };
-  }
-
   // Multi-tenant check email (supports personalEmail and businessEmail)
   static async checkEmail(email: string): Promise<CheckEmailResponse> {
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 1. Check for platform SuperAdmin
     const superAdmin = await prisma.superAdmin.findFirst({
       where: { email: normalizedEmail }
     });
@@ -94,14 +79,9 @@ export class AuthService {
       };
     }
 
-    // 2. Check for Organization Users (matching email, businessEmail, or personalEmail)
     const users = await prisma.user.findMany({
       where: {
-        OR: [
-          { email: normalizedEmail },
-          { businessEmail: normalizedEmail },
-          { personalEmail: normalizedEmail }
-        ],
+        ...emailMatch(normalizedEmail),
         status: { in: ['active', 'inactive'] }
       },
       include: {
@@ -116,24 +96,30 @@ export class AuthService {
     });
 
     if (users.length === 0) {
-      throw new Error('User not found with this email.');
+      throw new AppError('User not found with this email.', 404, 'USER_NOT_FOUND');
     }
 
-    // Filter to active organizations
-    const activeOrgUsers = users.filter(u => u.organization?.isActive);
+    const activeOrgUsers = users.filter((user) => user.organization?.isActive);
     if (activeOrgUsers.length === 0) {
-      throw new Error('Your organization account is inactive. Please contact support.');
+      throw new AppError(
+        'Your organization account is inactive. Please contact support.',
+        403,
+        'ORGANIZATION_INACTIVE'
+      );
     }
 
     if (activeOrgUsers.length === 1) {
-      const u = activeOrgUsers[0]!;
+      const user = activeOrgUsers[0];
+      if (!user) {
+        throw new AppError('User not found with this email.', 404, 'USER_NOT_FOUND');
+      }
       return {
         singleOrganization: true,
         organization: {
-          orgId: u.organization.id,
-          orgName: u.organization.name,
-          userId: u.id,
-          userStatus: u.status
+          orgId: user.organization.id,
+          orgName: user.organization.name,
+          userId: user.id,
+          userStatus: user.status
         },
         message: 'Single organization found'
       };
@@ -142,21 +128,21 @@ export class AuthService {
     return {
       singleOrganization: false,
       multipleOrganizations: true,
-      organizations: activeOrgUsers.map(u => ({
-        orgId: u.organization.id,
-        orgName: u.organization.name,
-        userId: u.id,
-        userStatus: u.status
+      organizations: activeOrgUsers.map((user) => ({
+        orgId: user.organization.id,
+        orgName: user.organization.name,
+        userId: user.id,
+        userStatus: user.status
       })),
       message: 'Multiple organizations found. Please select one.'
     };
   }
 
-  // Password verification and login
   static async verifyPassword(
     email: string,
     password: string,
-    orgId?: string
+    orgId?: string,
+    meta: SessionMeta = {}
   ): Promise<{ response: LoginSuccessResponse | LoginOtpRequiredResponse; tokens?: TokenPair }> {
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -166,20 +152,22 @@ export class AuthService {
     });
 
     if (superAdmin) {
-      const isValid = await bcrypt.compare(password, superAdmin.hashedPassword);
+      const isValid = await verifyPasswordHash(password, superAdmin.hashedPassword);
       if (!isValid) {
-        throw new Error('Invalid email or password.');
+        throw invalidCredentials();
       }
 
-      const tokens = this.generateSuperAdminTokens({
-        id: superAdmin.id,
-        email: superAdmin.email
-      });
+      if (needsRehash(superAdmin.hashedPassword)) {
+        await prisma.superAdmin.update({
+          where: { id: superAdmin.id },
+          data: { hashedPassword: await hashPassword(password) }
+        });
+      }
 
-      await prisma.superAdmin.update({
-        where: { id: superAdmin.id },
-        data: { refreshToken: tokens.refreshToken }
-      });
+      const tokens = await createSuperAdminSession(
+        { id: superAdmin.id, email: superAdmin.email },
+        meta
+      );
 
       return {
         tokens,
@@ -204,21 +192,13 @@ export class AuthService {
       };
     }
 
-    // 2. Organization User authentication
-    const userQuery: any = {
-      OR: [
-        { email: normalizedEmail },
-        { businessEmail: normalizedEmail },
-        { personalEmail: normalizedEmail }
-      ]
-    };
-
-    if (orgId) {
-      userQuery.orgId = orgId;
-    }
-
-    const user = await prisma.user.findFirst({
-      where: userQuery,
+    // 2. Organization user authentication. Without an explicit orgId we must
+    // never guess between multiple organizations sharing an email domain.
+    const users = await prisma.user.findMany({
+      where: {
+        ...emailMatch(normalizedEmail),
+        ...(orgId ? { orgId } : {})
+      },
       include: {
         organization: { select: { id: true, name: true, isActive: true } },
         roles: {
@@ -231,49 +211,77 @@ export class AuthService {
             }
           }
         }
-      }
+      },
+      take: orgId ? 1 : 2
     });
 
-    if (!user || !user.hashedPassword) {
-      throw new Error('Invalid email or password.');
+    const user = users[0];
+    if (!user?.hashedPassword) {
+      await verifyAgainstDummyHash(password);
+      throw invalidCredentials();
+    }
+
+    if (!orgId && users.length > 1) {
+      throw new AppError(
+        'Multiple organizations found. Please select an organization.',
+        409,
+        'ORG_SELECTION_REQUIRED'
+      );
     }
 
     if (!user.organization?.isActive) {
-      throw new Error('Organization account is inactive.');
+      throw new AppError(
+        'Organization account is inactive.',
+        403,
+        'ORGANIZATION_INACTIVE'
+      );
     }
 
     if (user.status === 'suspended') {
-      throw new Error('User is suspended.');
+      throw new AppError('User is suspended.', 403, 'USER_SUSPENDED');
     }
 
     if (user.status === 'inactive') {
-      throw new Error('User is inactive.');
+      throw new AppError('User is inactive.', 403, 'USER_INACTIVE');
     }
 
-    const isValid = await bcrypt.compare(password, user.hashedPassword);
+    const isValid = await verifyPasswordHash(password, user.hashedPassword);
     if (!isValid) {
-      throw new Error('Invalid email or password.');
+      throw invalidCredentials();
     }
 
-    // If 2FA is required
+    if (needsRehash(user.hashedPassword)) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { hashedPassword: await hashPassword(password) }
+      });
+    }
+
+    // If 2FA is required, issue a hashed, expiring, rate-limited OTP.
     if (user.twoFactorEnabled) {
-      // Cryptographically secure 6-digit OTP (fixes SEC-008, SEC-010)
       const otpCode = crypto.randomInt(100000, 1000000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      await prisma.emailOtpVerification.updateMany({
+        where: { userId: user.id, purpose: 'LOGIN', isUsed: false },
+        data: { isUsed: true }
+      });
 
       await prisma.emailOtpVerification.create({
         data: {
           userId: user.id,
-          otpCode,
+          otpCode: hashOtp(otpCode),
           purpose: 'LOGIN',
           expiresAt,
           isUsed: false,
           attemptsCount: 0,
-          maxAttempts: 3
+          maxAttempts: 3,
+          ipAddress: meta.ipAddress?.slice(0, 64) ?? null,
+          userAgent: meta.userAgent?.slice(0, 512) ?? null
         }
       });
 
-      logger.info({ userId: user.id }, 'Generated secure OTP for 2FA login');
+      logger.info({ userId: user.id }, 'Generated hashed OTP for 2FA login');
 
       return {
         response: {
@@ -285,24 +293,21 @@ export class AuthService {
       };
     }
 
-    // Standard login (2FA disabled by default)
-    const tokens = this.generateUserTokens({
-      id: user.id,
-      email: user.email,
-      orgId: user.orgId
-    });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken }
-    });
+    const tokens = await createUserSession(
+      { id: user.id, email: user.email, orgId: user.orgId },
+      meta
+    );
 
     const roles: string[] = [];
     const permissions: string[] = [];
-    for (const ur of user.roles) {
-      if (ur.role?.name) roles.push(ur.role.name);
-      for (const p of ur.role?.permissions || []) {
-        if (p.permission?.key) permissions.push(p.permission.key);
+    for (const userRole of user.roles) {
+      if (userRole.role?.name) {
+        roles.push(userRole.role.name);
+      }
+      for (const rolePermission of userRole.role?.permissions || []) {
+        if (rolePermission.permission?.key) {
+          permissions.push(rolePermission.permission.key);
+        }
       }
     }
 
@@ -323,7 +328,7 @@ export class AuthService {
           personalEmail: user.personalEmail,
           firstName: user.firstName,
           lastName: user.lastName,
-          name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+          name: displayName(user.firstName, user.lastName, user.email),
           orgId: user.orgId,
           roles,
           permissions,
@@ -339,21 +344,22 @@ export class AuthService {
     sessionToken?: string;
     otpCode: string;
     orgId?: string;
+    meta?: SessionMeta;
   }): Promise<{ response: LoginSuccessResponse; tokens: TokenPair }> {
-    const { email, sessionToken, otpCode, orgId } = params;
+    const { email, sessionToken, otpCode, orgId, meta = {} } = params;
 
     let targetUserId: string | null = null;
 
     if (sessionToken) {
       const session = await prisma.tempLoginSession.findFirst({
         where: {
-          sessionToken,
+          sessionToken: { in: verificationTokenCandidates(sessionToken) },
           expiresAt: { gt: new Date() },
           isUsed: false
         }
       });
       if (!session) {
-        throw new Error('Invalid or expired login session.');
+        throw new AppError('Invalid or expired login session.', 401, 'INVALID_LOGIN_SESSION');
       }
       targetUserId = session.userId;
       await prisma.tempLoginSession.update({
@@ -362,24 +368,36 @@ export class AuthService {
       });
     } else if (email) {
       const normalizedEmail = email.toLowerCase().trim();
-      const user = await prisma.user.findFirst({
+      const users = await prisma.user.findMany({
         where: {
-          OR: [
-            { email: normalizedEmail },
-            { businessEmail: normalizedEmail },
-            { personalEmail: normalizedEmail }
-          ],
+          ...emailMatch(normalizedEmail),
           ...(orgId ? { orgId } : {})
-        }
+        },
+        take: orgId ? 1 : 2
       });
+      if (users.length === 0) {
+        throw new AppError('Invalid or expired OTP.', 401, 'INVALID_OTP');
+      }
+      if (!orgId && users.length > 1) {
+        throw new AppError(
+          'Multiple organizations found. Please select an organization.',
+          409,
+          'ORG_SELECTION_REQUIRED'
+        );
+      }
+      const user = users[0];
       if (!user) {
-        throw new Error('User not found.');
+        throw new AppError('Invalid or expired OTP.', 401, 'INVALID_OTP');
       }
       targetUserId = user.id;
     }
 
     if (!targetUserId) {
-      throw new Error('Unable to identify user for OTP verification.');
+      throw new AppError(
+        'Unable to identify user for OTP verification.',
+        400,
+        'OTP_USER_REQUIRED'
+      );
     }
 
     const otpRecord = await prisma.emailOtpVerification.findFirst({
@@ -393,7 +411,7 @@ export class AuthService {
     });
 
     if (!otpRecord) {
-      throw new Error('Invalid or expired OTP.');
+      throw new AppError('Invalid or expired OTP.', 401, 'INVALID_OTP');
     }
 
     if (otpRecord.attemptsCount >= otpRecord.maxAttempts) {
@@ -401,18 +419,25 @@ export class AuthService {
         where: { id: otpRecord.id },
         data: { isUsed: true }
       });
-      throw new Error('Maximum OTP attempts exceeded. Please request a new code.');
+      throw new AppError(
+        'Maximum OTP attempts exceeded. Please request a new code.',
+        429,
+        'OTP_ATTEMPTS_EXCEEDED'
+      );
     }
 
-    if (otpRecord.otpCode !== otpCode) {
+    if (!otpMatches(otpRecord.otpCode, otpCode)) {
+      const nextAttempts = otpRecord.attemptsCount + 1;
       await prisma.emailOtpVerification.update({
         where: { id: otpRecord.id },
-        data: { attemptsCount: otpRecord.attemptsCount + 1 }
+        data: {
+          attemptsCount: { increment: 1 },
+          ...(nextAttempts >= otpRecord.maxAttempts ? { isUsed: true } : {})
+        }
       });
-      throw new Error('Invalid OTP code.');
+      throw new AppError('Invalid OTP code.', 401, 'INVALID_OTP');
     }
 
-    // Mark OTP as used
     await prisma.emailOtpVerification.update({
       where: { id: otpRecord.id },
       data: { isUsed: true, usedAt: new Date() }
@@ -435,27 +460,29 @@ export class AuthService {
       }
     });
 
-    if (!user || !user.organization?.isActive) {
-      throw new Error('User account or organization is inactive.');
+    if (user?.status !== 'active' || !user.organization?.isActive) {
+      throw new AppError(
+        'User account or organization is inactive.',
+        403,
+        'ACCOUNT_INACTIVE'
+      );
     }
 
-    const tokens = this.generateUserTokens({
-      id: user.id,
-      email: user.email,
-      orgId: user.orgId
-    });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken }
-    });
+    const tokens = await createUserSession(
+      { id: user.id, email: user.email, orgId: user.orgId },
+      meta
+    );
 
     const roles: string[] = [];
     const permissions: string[] = [];
-    for (const ur of user.roles) {
-      if (ur.role?.name) roles.push(ur.role.name);
-      for (const p of ur.role?.permissions || []) {
-        if (p.permission?.key) permissions.push(p.permission.key);
+    for (const userRole of user.roles) {
+      if (userRole.role?.name) {
+        roles.push(userRole.role.name);
+      }
+      for (const rolePermission of userRole.role?.permissions || []) {
+        if (rolePermission.permission?.key) {
+          permissions.push(rolePermission.permission.key);
+        }
       }
     }
 
@@ -476,7 +503,7 @@ export class AuthService {
           personalEmail: user.personalEmail,
           firstName: user.firstName,
           lastName: user.lastName,
-          name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+          name: displayName(user.firstName, user.lastName, user.email),
           orgId: user.orgId,
           roles,
           permissions,
@@ -486,142 +513,141 @@ export class AuthService {
     };
   }
 
-  // Secure Password Setup (Fixes SEC-005: rejects null token, invalidates token after use, no password leakage)
-  static async setPassword(password: string, verificationToken: string): Promise<UserSummaryDTO> {
-    if (!verificationToken || typeof verificationToken !== 'string' || verificationToken.trim() === '') {
-      throw new Error('A valid verification token must be provided.');
+  // Secure password setup: token hash + expiry + single use + session revocation.
+  static async setPassword(
+    password: string,
+    verificationToken: string
+  ): Promise<UserSummaryDTO> {
+    if (
+      !verificationToken ||
+      typeof verificationToken !== 'string' ||
+      verificationToken.trim() === ''
+    ) {
+      throw new AppError(
+        'A valid verification token must be provided.',
+        400,
+        'VERIFICATION_TOKEN_REQUIRED'
+      );
     }
 
+    const token = verificationToken.trim();
     const user = await prisma.user.findFirst({
       where: {
-        verificationToken: verificationToken.trim()
+        verificationToken: { in: verificationTokenCandidates(token) }
       }
     });
 
-    if (!user) {
-      throw new Error('Invalid or expired verification token.');
+    if (!user?.verificationToken) {
+      throw new AppError(
+        'Invalid or expired verification token.',
+        400,
+        'INVALID_VERIFICATION_TOKEN'
+      );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (!verificationTokenMatches(user.verificationToken, token)) {
+      throw new AppError(
+        'Invalid or expired verification token.',
+        400,
+        'INVALID_VERIFICATION_TOKEN'
+      );
+    }
 
-    // Invalidate token so it can NEVER be reused (replay protection)
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        hashedPassword,
-        status: 'active',
-        verificationToken: null // Token cleared!
-      },
-      select: {
-        id: true,
-        email: true,
-        businessEmail: true,
-        personalEmail: true,
-        firstName: true,
-        lastName: true,
-        orgId: true,
-        status: true
-      }
+    const legacyExpiry = new Date(
+      user.createdAt.getTime() + parseDurationMs(env.LEGACY_VERIFICATION_TOKEN_TTL)
+    );
+    const expiresAt = user.verificationTokenExpiry ?? legacyExpiry;
+
+    if (expiresAt.getTime() <= Date.now()) {
+      throw new AppError(
+        'Invalid or expired verification token.',
+        400,
+        'INVALID_VERIFICATION_TOKEN'
+      );
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      await revokeUserSessionsInTransaction(tx, user.id);
+      return tx.user.update({
+        where: { id: user.id },
+        data: {
+          hashedPassword,
+          status: 'active',
+          verificationToken: null,
+          verificationTokenExpiry: null,
+          refreshToken: null
+        },
+        select: {
+          id: true,
+          email: true,
+          businessEmail: true,
+          personalEmail: true,
+          firstName: true,
+          lastName: true,
+          orgId: true,
+          status: true
+        }
+      });
     });
 
-    logger.info({ userId: updatedUser.id }, 'Password set and verification token invalidated successfully');
+    logger.info(
+      { userId: updatedUser.id },
+      'Password set, verification token invalidated and sessions revoked'
+    );
 
     return {
-      ...updatedUser,
-      name: `${updatedUser.firstName || ''} ${updatedUser.lastName || ''}`.trim() || updatedUser.email
+      id: updatedUser.id,
+      email: updatedUser.email,
+      businessEmail: updatedUser.businessEmail,
+      personalEmail: updatedUser.personalEmail,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      orgId: updatedUser.orgId,
+      status: updatedUser.status,
+      name: displayName(updatedUser.firstName, updatedUser.lastName, updatedUser.email)
     };
   }
 
-  // Refresh token rotation
-  static async refreshToken(incomingRefreshToken: string): Promise<TokenPair> {
-    // 1. Try SuperAdmin token
+  // Refresh token rotation with reuse detection and session-family revocation.
+  static async refreshToken(
+    incomingRefreshToken: string,
+    meta: SessionMeta = {}
+  ): Promise<TokenPair> {
     try {
-      const decoded = jwt.verify(
-        incomingRefreshToken,
-        env.SUPER_ADMIN_REFRESH_TOKEN_SECRET
-      ) as DecodedTokenPayload;
-
-      if (decoded.typ === 'super_admin') {
-        const superAdmin = await prisma.superAdmin.findUnique({
-          where: { id: decoded.id }
-        });
-
-        if (!superAdmin || superAdmin.refreshToken !== incomingRefreshToken) {
-          throw new Error('Invalid super-admin refresh token.');
-        }
-
-        const newTokens = this.generateSuperAdminTokens({
-          id: superAdmin.id,
-          email: superAdmin.email
-        });
-
-        await prisma.superAdmin.update({
-          where: { id: superAdmin.id },
-          data: { refreshToken: newTokens.refreshToken }
-        });
-
-        return newTokens;
+      // Determine token type by signature before touching the session store.
+      verifySuperAdminRefreshToken(incomingRefreshToken);
+      return await rotateSuperAdminSession(incomingRefreshToken, meta);
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'REFRESH_TOKEN_REUSED') {
+        throw error;
       }
-    } catch {
-      // Fall through to check user token
+
+      if (!(error instanceof jwt.TokenExpiredError) && !(error instanceof jwt.JsonWebTokenError)) {
+        throw error;
+      }
     }
 
-    // 2. Try Organization User token
-    try {
-      const decoded = jwt.verify(
-        incomingRefreshToken,
-        env.USER_REFRESH_TOKEN_SECRET
-      ) as DecodedTokenPayload;
-
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-        include: {
-          organization: { select: { isActive: true } }
-        }
-      });
-
-      if (!user || user.refreshToken !== incomingRefreshToken) {
-        throw new Error('Invalid user refresh token.');
-      }
-
-      if (user.status !== 'active' || !user.organization?.isActive) {
-        throw new Error('Account or organization is inactive.');
-      }
-
-      const newTokens = this.generateUserTokens({
-        id: user.id,
-        email: user.email,
-        orgId: user.orgId
-      });
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { refreshToken: newTokens.refreshToken }
-      });
-
-      return newTokens;
-    } catch (err: any) {
-      throw new Error(err.message || 'Invalid or expired refresh token.');
-    }
+    return rotateUserSession(incomingRefreshToken, meta);
   }
 
-  // Logout - clear tokens
+  // Logout - revoke all sessions for the account.
   static async logout(userId: string, isSuperAdmin = false): Promise<void> {
     if (isSuperAdmin) {
-      await prisma.superAdmin.updateMany({
-        where: { id: userId },
-        data: { refreshToken: null }
-      });
-    } else {
-      await prisma.user.updateMany({
-        where: { id: userId },
-        data: { refreshToken: null }
-      });
+      await revokeSuperAdminSessions(userId);
+      return;
     }
+
+    await revokeUserSessions(userId);
   }
 
   // Get full user profile for token validation
-  static async getUserProfile(userId: string, orgId?: string, isSuperAdmin = false): Promise<any> {
+  static async getUserProfile(
+    userId: string,
+    orgId?: string,
+    isSuperAdmin = false
+  ): Promise<UserSummaryDTO> {
     if (isSuperAdmin) {
       const superAdmin = await prisma.superAdmin.findUnique({
         where: { id: userId },
@@ -633,7 +659,7 @@ export class AuthService {
       });
 
       if (!superAdmin) {
-        throw new Error('Super-admin not found.');
+        throw new AppError('Super-admin not found.', 404, 'SUPERADMIN_NOT_FOUND');
       }
 
       return {
@@ -641,11 +667,7 @@ export class AuthService {
         email: superAdmin.email,
         name: superAdmin.name,
         superAdmin: true,
-        isSuperAdmin: true,
-        organization: {
-          id: 'platform-superadmin',
-          name: 'Platform Administration'
-        }
+        isSuperAdmin: true
       };
     }
 
@@ -692,30 +714,45 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error('User not found.');
+      throw new AppError('User not found.', 404, 'USER_NOT_FOUND');
     }
 
     if (user.status !== 'active') {
-      throw new Error('User account is inactive.');
+      throw new AppError('User account is inactive.', 403, 'USER_INACTIVE');
     }
 
     if (!user.organization?.isActive) {
-      throw new Error('Organization is inactive.');
+      throw new AppError('Organization is inactive.', 403, 'ORGANIZATION_INACTIVE');
     }
 
     const roles: string[] = [];
     const permissions: string[] = [];
-    for (const ur of user.roles) {
-      if (ur.role?.name) roles.push(ur.role.name);
-      for (const p of ur.role?.permissions || []) {
-        if (p.permission?.key) permissions.push(p.permission.key);
+    for (const userRole of user.roles) {
+      if (userRole.role?.name) {
+        roles.push(userRole.role.name);
+      }
+      for (const rolePermission of userRole.role?.permissions || []) {
+        if (rolePermission.permission?.key) {
+          permissions.push(rolePermission.permission.key);
+        }
       }
     }
 
     return {
-      ...user,
+      id: user.id,
+      email: user.email,
+      businessEmail: user.businessEmail,
+      personalEmail: user.personalEmail,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      name: displayName(user.firstName, user.lastName, user.email),
+      orgId: user.orgId,
+      status: user.status,
       roles,
-      permissions
+      permissions,
+      isSuperAdmin: false,
+      organization: user.organization,
+      department: user.department
     };
   }
 }

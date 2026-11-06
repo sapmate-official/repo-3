@@ -1,11 +1,12 @@
-import { Request, Response, NextFunction } from 'express';
+import { type NextFunction, type Request, type Response } from 'express';
 import '../types/auth.js';
 
-export const requireOrgScope = (
-  paramName: string = 'orgId'
-) => {
+const readString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.length > 0 ? value : undefined;
+
+export const requireOrgScope = (paramName = 'orgId') => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user || !req.user.orgId) {
+    if (!req.user?.orgId) {
       res.status(401).json({
         error: 'Authentication and active organization context required.',
         code: 'UNAUTHENTICATED'
@@ -13,12 +14,18 @@ export const requireOrgScope = (
       return;
     }
 
-    const requestedOrgId = req.params[paramName] || req.body?.[paramName] || req.query?.[paramName];
+    const body = req.body as Record<string, unknown> | undefined;
+    const query = req.query as Record<string, unknown> | undefined;
+    const requestedOrgId =
+      readString(req.params[paramName]) ??
+      readString(body?.[paramName]) ??
+      readString(query?.[paramName]);
 
     // If no orgId is specified in request, force the user's authenticated orgId
     if (!requestedOrgId) {
       req.params[paramName] = req.user.orgId;
-      return next();
+      next();
+      return;
     }
 
     // Enforce tenant boundary: user cannot access other organizations

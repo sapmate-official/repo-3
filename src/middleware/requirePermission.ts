@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import '../types/auth.js';
 
 export const requirePermission = (
@@ -17,7 +17,7 @@ export const requirePermission = (
     // Org_Admin role bypasses individual permission checks for convenience
     const hasAllowedRole = req.user.roles.some(r => allowedRoles.includes(r));
     if (hasAllowedRole) {
-      return next();
+      next(); return;
     }
 
     // Check individual permission key

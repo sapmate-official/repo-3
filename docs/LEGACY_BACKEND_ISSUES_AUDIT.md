@@ -26,7 +26,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   Any unauthenticated user on the internet can list all SuperAdmin accounts (`GET /api/v2/super-admin/`), read their profile/email, update their hashed passwords (`PUT /api/v2/super-admin/:id`), or permanently delete them (`DELETE /api/v2/super-admin/:id`).
 - **Legacy Status**: ⚠️ Open (Vulnerable)
-- **TypeScript Backend Status**: 🟡 Guard implemented, not wired (`superAdminAuth.ts` verifies SuperAdmin role and database existence, but no super-admin routes exist yet — see Phase 3).
+- **TypeScript Backend Status**: 🟡 Guard implemented (now used by organization CRUD); super-admin account CRUD routes are still pending.
 
 ---
 
@@ -42,7 +42,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   Any normal employee or tenant manager token is accepted as a SuperAdmin by SuperAdmin billing and statistics endpoints.
 - **Legacy Status**: ⚠️ Open (Vulnerable)
-- **TypeScript Backend Status**: 🟡 Guard implemented, not wired (dedicated typed guard `superAdminAuth.ts`, separate `SUPER_ADMIN_*_TOKEN_SECRET` secrets, and `typ: 'super_admin'` claims; no super-admin routes exist yet).
+- **TypeScript Backend Status**: 🟡 Guard implemented (dedicated typed guard `superAdminAuth.ts`, separate `SUPER_ADMIN_*_TOKEN_SECRET` secrets, and `typ: 'super_admin'` claims; now used by organization CRUD, super-admin account routes still pending).
 
 ---
 
@@ -60,7 +60,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   Hardcoded development test credentials and email redirection directly in production code.
 - **Legacy Status**: ⚠️ Open
-- **TypeScript Backend Status**: ⏳ Not yet ported (no super-admin login exists in `alkaa-backend-ts`; no hardcoded email is present).
+- **TypeScript Backend Status**: ✅ Resolved (super-admin login is database-driven via `POST /api/v1/auth/login`; no hardcoded email).
 
 ---
 
@@ -92,7 +92,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   Anonymous attackers can dump all tenant organizations, create rogue tenants, or delete existing tenant organizations.
 - **Legacy Status**: ⚠️ Open (Vulnerable)
-- **TypeScript Backend Status**: ⏳ To be implemented in Phase 3 (Strict SuperAdmin & OrgAdmin RBAC guards).
+- **TypeScript Backend Status**: ✅ Resolved in Phase 3 (`/api/v1/organization` CRUD is super-admin-only via `authenticateSuperAdmin`; covered by e2e tests).
 
 ---
 
@@ -106,7 +106,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   Anyone can promote arbitrary users to organization admins or revoke existing organization admins without authorization.
 - **Legacy Status**: ⚠️ Open (Vulnerable)
-- **TypeScript Backend Status**: ⏳ To be implemented in Phase 3.
+- **TypeScript Backend Status**: ✅ Resolved in Phase 3 (promote/revoke require authentication, tenant scope, and `manage_organization`; covered by e2e tests).
 
 ---
 
@@ -118,7 +118,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Description**:
   The route is mapped as `POST /:id/admins`, meaning `orgId` arrives in `req.params.id`. However, the controller extracts `const { orgId, userId } = req.body`. Calling the REST endpoint without redundant body params causes `orgId` to be undefined and always fails with `403: User does not belong to this organization`.
 - **Legacy Status**: ⚠️ Open (Buggy endpoint)
-- **TypeScript Backend Status**: ⏳ To be implemented in Phase 3 with Zod schema validating route params and body.
+- **TypeScript Backend Status**: ✅ Resolved in Phase 3 (`POST /api/v1/organization/:orgId/admins` reads `orgId` from the path and only `userId` from the body, validated with Zod).
 
 ---
 
@@ -131,7 +131,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   The user continues to retain `Org_Admin` permissions on all routes checking `UserRole`.
 - **Legacy Status**: ⚠️ Open
-- **TypeScript Backend Status**: ⏳ To be implemented in Phase 3 with atomic Prisma transactions revoking both `organization_admin` and `UserRole`.
+- **TypeScript Backend Status**: ✅ Resolved in Phase 3 (`removeAdmin` revokes `organization_admin` and the `Org_Admin` `UserRole` in one transaction; covered by e2e tests).
 
 ---
 
@@ -147,7 +147,7 @@ This document tracks all known **bugs, architectural defects, logic errors, and 
 - **Impact**:
   An employee from Company A can query the full employee roster, personal emails, phone numbers, salary details, and bank account details of Company B.
 - **Legacy Status**: ⚠️ Open (Vulnerable)
-- **TypeScript Backend Status**: 🟡 Guard ready, not wired (`requireOrgScope.ts` correctly enforces `req.user.orgId`, but it is not imported by any route — no employee endpoints are ported yet).
+- **TypeScript Backend Status**: 🟡 Guard wired for organization admin routes; employee endpoints are not ported yet.
 
 ---
 

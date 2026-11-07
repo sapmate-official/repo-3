@@ -1,13 +1,22 @@
 import type { Request, Response, NextFunction } from 'express';
-import { DepartmentService } from './department.service.js';
+import { DepartmentService, type DepartmentCreateInput, type DepartmentUpdateInput } from './department.service.js';
 import { AppError } from '../../util/errors.js';
 
-const strParam = (val: unknown): string => (Array.isArray(val) ? val[0] : (val as string) || '');
+const strParam = (val: unknown): string => {
+  if (Array.isArray(val)) {
+    const first: unknown = val[0];
+    return typeof first === 'string' ? first : '';
+  }
+  if (typeof val === 'string' && val !== 'undefined' && val !== 'null') {
+    return val;
+  }
+  return '';
+};
 
 export class DepartmentController {
   static async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -21,7 +30,7 @@ export class DepartmentController {
 
   static async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -36,13 +45,14 @@ export class DepartmentController {
 
   static async getEmployees(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
       const department = await DepartmentService.getDepartmentById(orgId, strParam(req.params.id));
-      res.status(200).json((department as any).users ?? []);
+      const users = (department as { users?: unknown[] }).users ?? [];
+      res.status(200).json(users);
     } catch (error) {
       next(error);
     }
@@ -50,7 +60,7 @@ export class DepartmentController {
 
   static async setHead(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -71,12 +81,13 @@ export class DepartmentController {
 
   static async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.body.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const body = req.body as DepartmentCreateInput & { orgId?: string };
+      const orgId = strParam(body.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
-      const department = await DepartmentService.createDepartment(orgId, req.body);
+      const department = await DepartmentService.createDepartment(orgId, body);
       res.status(201).json(department);
     } catch (error) {
       next(error);
@@ -85,13 +96,14 @@ export class DepartmentController {
 
   static async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const body = req.body as DepartmentUpdateInput;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
       const id = strParam(req.params.id);
-      const department = await DepartmentService.updateDepartment(orgId, id, req.body);
+      const department = await DepartmentService.updateDepartment(orgId, id, body);
       res.status(200).json(department);
     } catch (error) {
       next(error);

@@ -3,7 +3,7 @@ import { EmailService } from '../services/email.service.js';
 async function testEmailDispatch() {
   console.log('Sending test verification email via Brevo...');
   const success = await EmailService.sendEmail({
-    to: [{ email: process.env.SENDER_EMAIL || '', name: 'Soumabrata Ghosh' }],
+    to: [{ email: process.env.SENDER_EMAIL ?? '', name: 'Soumabrata Ghosh' }],
     subject: 'Alkaa HRMS - Email System Successfully Connected! 🚀',
     htmlContent: `
       <div style="font-family: Arial, sans-serif; padding: 25px; border-radius: 8px; border: 1px solid #e5e7eb;">

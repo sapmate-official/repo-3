@@ -1,39 +1,70 @@
 import crypto from 'crypto';
+import type { Prisma, OnboardingStatus } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 import { hashPassword } from '../../util/password.js';
 import { EmailService } from '../../services/email.service.js';
+import type {
+  CreateCandidateInput,
+  SubmitCandidateFormInput,
+  CompleteOnboardingInput,
+  ApproveCandidateInput
+} from './onboarding.schema.js';
 
-export interface CreateCandidateInput {
-  email: string;
-  personalEmail?: string | null;
-  businessEmail?: string | null;
-  firstName: string;
-  lastName?: string;
+export interface CandidateFormData extends Record<string, unknown> {
+  jobTitle?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   mobileNumber?: string | null;
-  jobTitle?: string | null;
-  departmentId?: string | null;
-  managerId?: string | null;
-  annualPackage?: number | null;
-  monthlySalary?: number | null;
-  hiredDate?: string | null;
+  emergencyContact?: string | null;
+  dateOfBirth?: string | null;
+  address?: string | null;
+  adharNumber?: string | null;
+  panNumber?: string | null;
+  submittedAt?: string;
+  bankDetails?: {
+    accountHolderName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    bankName?: string;
+  };
+  documents?: Record<string, unknown>;
+  documentsAudit?: Record<string, {
+    status: 'VERIFIED' | 'REJECTED';
+    feedback: string | null;
+    reviewedById: string;
+    reviewedAt: string;
+  }>;
+  approvalData?: {
+    roleId?: string;
+    departmentId?: string;
+    managerId?: string;
+    jobTitle?: string | null;
+    annualPackage?: number;
+    monthlySalary?: number;
+    approvedAt?: string;
+    approvedBy?: string;
+  };
+  changeRequests?: {
+    feedback: string;
+    requestedAt: string;
+    requestedBy: string;
+  }[];
+  additionalInfo?: Record<string, unknown>;
 }
 
-export interface CompleteOnboardingInput {
-  roleId: string;
-  departmentId?: string | null;
-  managerId?: string | null;
-  businessEmail?: string | null;
-  jobTitle?: string | null;
-  annualPackage?: number | null;
-  monthlySalary?: number | null;
-}
+const parseFormData = (val: unknown): CandidateFormData => {
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+    return val as CandidateFormData;
+  }
+  return {};
+};
 
 export class OnboardingService {
   static async listCandidates(orgId: string, status?: string) {
-    const where: any = { orgId };
+    const where: Prisma.OnboardingCandidateWhereInput = { orgId };
     if (status && status !== 'ALL') {
-      where.status = status;
+      where.status = status as OnboardingStatus;
     }
 
     return prisma.onboardingCandidate.findMany({
@@ -157,8 +188,8 @@ export class OnboardingService {
     }
 
     // Calculate salaries
-    const annualPackage = input.annualPackage || (input.monthlySalary ? input.monthlySalary * 12 : null);
-    const monthlySalary = input.monthlySalary || (input.annualPackage ? Math.round(input.annualPackage / 12) : null);
+    const annualPackage = input.annualPackage ?? (input.monthlySalary ? input.monthlySalary * 12 : null);
+    const monthlySalary = input.monthlySalary ?? (input.annualPackage ? Math.round(input.annualPackage / 12) : null);
 
     // Cryptographically secure token (32 bytes = 64 hex chars)
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -169,13 +200,13 @@ export class OnboardingService {
         orgId,
         createdById: effectiveCreatedById,
         email,
-        personalEmail: input.personalEmail || email,
-        businessEmail: input.businessEmail || null,
+        personalEmail: input.personalEmail ?? email,
+        businessEmail: input.businessEmail ?? null,
         firstName: input.firstName,
-        lastName: input.lastName || '',
-        mobileNumber: input.mobileNumber || null,
-        departmentId: input.departmentId || null,
-        managerId: input.managerId || null,
+        lastName: input.lastName ?? '',
+        mobileNumber: input.mobileNumber ?? null,
+        departmentId: input.departmentId ?? null,
+        managerId: input.managerId ?? null,
         annualPackage,
         monthlySalary,
         hiredDate: input.hiredDate ? new Date(input.hiredDate) : null,
@@ -183,7 +214,7 @@ export class OnboardingService {
         verificationToken,
         tokenExpiry,
         formData: {
-          jobTitle: input.jobTitle || null
+          jobTitle: input.jobTitle ?? null
         }
       },
       include: {
@@ -195,14 +226,15 @@ export class OnboardingService {
       }
     });
 
-    EmailService.sendCandidateInviteEmail({
-      email: candidate.personalEmail || candidate.email,
+    const parsedData = parseFormData(candidate.formData);
+    void EmailService.sendCandidateInviteEmail({
+      email: candidate.personalEmail ?? candidate.email,
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       companyName: candidate.organization.name,
-      token: candidate.verificationToken!,
-      jobTitle: (candidate.formData as any)?.jobTitle || null
-    }).catch(() => {});
+      token: candidate.verificationToken ?? '',
+      jobTitle: parsedData.jobTitle ?? null
+    }).catch(() => undefined);
 
     return candidate;
   }
@@ -222,13 +254,14 @@ export class OnboardingService {
       });
     }
 
+    const parsedData = parseFormData(candidate.formData);
     const sent = await EmailService.sendCandidateInviteEmail({
-      email: candidate.personalEmail || candidate.email,
+      email: candidate.personalEmail ?? candidate.email,
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       companyName: candidate.organization.name,
       token,
-      jobTitle: (candidate.formData as any)?.jobTitle || null
+      jobTitle: parsedData.jobTitle ?? null
     });
 
     return {
@@ -286,7 +319,7 @@ export class OnboardingService {
   }
 
   // Public candidate self-service endpoint: submit form
-  static async submitCandidateForm(token: string, formData: any) {
+  static async submitCandidateForm(token: string, formData: SubmitCandidateFormInput) {
     const candidate = await prisma.onboardingCandidate.findFirst({
       where: { verificationToken: token }
     });
@@ -300,7 +333,7 @@ export class OnboardingService {
     }
 
     // Merge existing formData with new submissions
-    const existingData = (candidate.formData as any) || {};
+    const existingData = parseFormData(candidate.formData);
     const mergedData = {
       ...existingData,
       ...formData,
@@ -310,12 +343,12 @@ export class OnboardingService {
     return prisma.onboardingCandidate.update({
       where: { id: candidate.id },
       data: {
-        formData: mergedData,
+        formData: mergedData as unknown as Prisma.InputJsonValue,
         formSubmittedAt: new Date(),
         status: 'FORM_SUBMITTED',
-        firstName: formData.firstName || candidate.firstName,
-        lastName: formData.lastName !== undefined ? formData.lastName : candidate.lastName,
-        mobileNumber: formData.mobileNumber || candidate.mobileNumber
+        firstName: formData.firstName ?? candidate.firstName,
+        lastName: formData.lastName ?? candidate.lastName,
+        mobileNumber: formData.mobileNumber ?? candidate.mobileNumber
       }
     });
   }
@@ -336,12 +369,12 @@ export class OnboardingService {
   static async verifyDocument(orgId: string, id: string, reviewerId: string, docKey: string, status: 'VERIFIED' | 'REJECTED', feedback?: string) {
     const candidate = await this.getCandidateById(orgId, id);
 
-    const formData = (candidate.formData as any) || {};
-    const documentsAudit = formData.documentsAudit || {};
+    const formData = parseFormData(candidate.formData);
+    const documentsAudit = formData.documentsAudit ?? {};
 
     documentsAudit[docKey] = {
       status,
-      feedback: feedback || null,
+      feedback: feedback ?? null,
       reviewedById: reviewerId,
       reviewedAt: new Date().toISOString()
     };
@@ -351,15 +384,15 @@ export class OnboardingService {
     return prisma.onboardingCandidate.update({
       where: { id: candidate.id },
       data: {
-        formData
+        formData: { ...formData } as unknown as Prisma.InputJsonValue
       }
     });
   }
 
-  static async approveCandidate(orgId: string, id: string, reviewerId: string, approvalData: any = {}) {
+  static async approveCandidate(orgId: string, id: string, reviewerId: string, approvalData: ApproveCandidateInput = {}) {
     const candidate = await this.getCandidateById(orgId, id);
 
-    const formData = (candidate.formData as any) || {};
+    const formData = parseFormData(candidate.formData);
     formData.approvalData = {
       ...formData.approvalData,
       ...approvalData,
@@ -373,7 +406,7 @@ export class OnboardingService {
         status: 'APPROVED',
         reviewedById: reviewerId,
         reviewedAt: new Date(),
-        formData
+        formData: { ...formData } as unknown as Prisma.InputJsonValue
       },
       include: {
         organization: true,
@@ -381,14 +414,17 @@ export class OnboardingService {
       }
     });
 
+    const rawJobTitle: unknown = approvalData.jobTitle;
+    const jobTitle = typeof rawJobTitle === 'string' ? rawJobTitle : (formData.jobTitle ?? null);
+
     // Dispatch approval email to candidate
-    EmailService.sendCandidateApprovedEmail({
-      email: candidate.personalEmail || candidate.email,
+    void EmailService.sendCandidateApprovedEmail({
+      email: candidate.personalEmail ?? candidate.email,
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       companyName: candidate.organization.name,
-      jobTitle: approvalData.jobTitle || (formData.jobTitle as string) || null
-    }).catch(() => {});
+      jobTitle
+    }).catch(() => undefined);
 
     return updated;
   }
@@ -414,12 +450,12 @@ export class OnboardingService {
       throw new AppError('Candidate must be APPROVED before completing onboarding.', 400, 'NOT_APPROVED');
     }
 
-    const formData = (candidate.formData as any) || {};
-    const approvalData = formData.approvalData || {};
+    const formData = parseFormData(candidate.formData);
+    const approvalData = formData.approvalData ?? {};
 
-    const departmentId = input.departmentId || approvalData.departmentId || candidate.departmentId;
-    const managerId = input.managerId || approvalData.managerId || candidate.managerId;
-    const roleId = input.roleId || approvalData.roleId;
+    const departmentId = input.departmentId ?? approvalData.departmentId ?? candidate.departmentId;
+    const managerId = input.managerId ?? approvalData.managerId ?? candidate.managerId;
+    const roleId = input.roleId ?? approvalData.roleId;
 
     if (!roleId) {
       throw new AppError('Role ID is required to provision the employee.', 400, 'ROLE_REQUIRED');
@@ -464,8 +500,8 @@ export class OnboardingService {
     const hashedPassword = await hashPassword(tempPassword);
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    const annualPackage = input.annualPackage || approvalData.annualPackage || candidate.annualPackage || 0;
-    const monthlySalary = input.monthlySalary || approvalData.monthlySalary || candidate.monthlySalary || (annualPackage ? Math.round(annualPackage / 12) : 0);
+    const annualPackage = input.annualPackage ?? approvalData.annualPackage ?? candidate.annualPackage ?? 0;
+    const monthlySalary = input.monthlySalary ?? approvalData.monthlySalary ?? candidate.monthlySalary ?? (annualPackage ? Math.round(annualPackage / 12) : 0);
 
     const bank = formData.bankDetails;
 
@@ -474,22 +510,22 @@ export class OnboardingService {
       const createdUser = await tx.user.create({
         data: {
           orgId,
-          firstName: formData.firstName || candidate.firstName,
-          lastName: formData.lastName || candidate.lastName || '',
-          email: input.businessEmail || candidate.businessEmail || candidate.email,
+          firstName: formData.firstName ?? candidate.firstName,
+          lastName: formData.lastName ?? candidate.lastName ?? '',
+          email: input.businessEmail ?? candidate.businessEmail ?? candidate.email,
           personalEmail: candidate.email,
-          businessEmail: input.businessEmail || candidate.businessEmail || null,
-          jobTitle: input.jobTitle || formData.jobTitle || null,
-          mobileNumber: formData.mobileNumber || candidate.mobileNumber,
+          businessEmail: input.businessEmail ?? candidate.businessEmail ?? null,
+          jobTitle: input.jobTitle ?? formData.jobTitle ?? null,
+          mobileNumber: formData.mobileNumber ?? candidate.mobileNumber,
           dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
-          hiredDate: candidate.hiredDate || new Date(),
-          address: formData.address || null,
-          adharNumber: formData.adharNumber || null,
-          panNumber: formData.panNumber || null,
-          emergencyContact: formData.emergencyContact || null,
+          hiredDate: candidate.hiredDate ?? new Date(),
+          address: formData.address ?? null,
+          adharNumber: formData.adharNumber ?? null,
+          panNumber: formData.panNumber ?? null,
+          emergencyContact: formData.emergencyContact ?? null,
           employeeId,
-          departmentId: departmentId || null,
-          managerId: managerId || null,
+          departmentId: departmentId ?? null,
+          managerId: managerId ?? null,
           hashedPassword,
           verificationToken,
           status: 'active',
@@ -498,14 +534,14 @@ export class OnboardingService {
           roles: {
             create: [{ role: { connect: { id: roleId } } }]
           },
-          ...(bank?.accountNumber && bank?.ifscCode
+          ...(bank?.accountNumber && bank.ifscCode
             ? {
                 bankDetails: {
                   create: {
-                    accountHolder: bank.accountHolderName || `${candidate.firstName} ${candidate.lastName || ''}`.trim(),
+                    accountHolder: bank.accountHolderName ?? `${candidate.firstName} ${candidate.lastName ?? ''}`.trim(),
                     accountNumber: bank.accountNumber,
                     ifscCode: bank.ifscCode,
-                    bankName: bank.bankName || 'Bank'
+                    bankName: bank.bankName ?? 'Bank'
                   }
                 }
               }
@@ -559,13 +595,13 @@ export class OnboardingService {
     const { hashedPassword: _p, ...safeUser } = user;
 
     // Dispatch official account credentials email to employee
-    EmailService.sendNewEmployeeWelcomeEmail({
+    void EmailService.sendNewEmployeeWelcomeEmail({
       email: safeUser.email,
-      name: `${safeUser.firstName} ${safeUser.lastName || ''}`.trim(),
+      name: `${safeUser.firstName} ${safeUser.lastName ?? ''}`.trim(),
       employeeId,
       temporaryPassword: tempPassword,
       companyName: candidate.organization.name
-    }).catch(() => {});
+    }).catch(() => undefined);
 
     return {
       message: 'Onboarding completed and employee successfully provisioned',
@@ -578,14 +614,14 @@ export class OnboardingService {
 
   static async getCandidateReviewData(orgId: string, id: string) {
     const candidate = await this.getCandidateById(orgId, id);
-    const formData = (candidate.formData as any) || {};
+    const formData = parseFormData(candidate.formData);
 
     return {
       data: {
         candidateInfo: {
           id: candidate.id,
           email: candidate.email,
-          personalEmail: candidate.personalEmail || candidate.email,
+          personalEmail: candidate.personalEmail ?? candidate.email,
           firstName: candidate.firstName,
           lastName: candidate.lastName,
           mobileNumber: candidate.mobileNumber,
@@ -601,18 +637,18 @@ export class OnboardingService {
         },
         submittedData: {
           personalInfo: {
-            firstName: formData.firstName || candidate.firstName,
-            lastName: formData.lastName || candidate.lastName,
-            mobileNumber: formData.mobileNumber || candidate.mobileNumber,
+            firstName: formData.firstName ?? candidate.firstName,
+            lastName: formData.lastName ?? candidate.lastName,
+            mobileNumber: formData.mobileNumber ?? candidate.mobileNumber,
             emergencyContact: formData.emergencyContact,
             dateOfBirth: formData.dateOfBirth,
             address: formData.address,
             adharNumber: formData.adharNumber,
             panNumber: formData.panNumber
           },
-          bankDetails: formData.bankDetails || {},
-          documents: formData.documents || {},
-          additionalInfo: formData.additionalInfo || {}
+          bankDetails: formData.bankDetails ?? {},
+          documents: formData.documents ?? {},
+          additionalInfo: formData.additionalInfo ?? {}
         },
         reviewHistory: {
           reviewedBy: candidate.reviewedBy,
@@ -623,39 +659,43 @@ export class OnboardingService {
           createdBy: candidate.createdBy,
           organization: candidate.organization,
           tokenExpiry: candidate.tokenExpiry,
-          hasToken: !!candidate.verificationToken
+          hasToken: Boolean(candidate.verificationToken)
         }
       }
     };
   }
 
-  static async updateCandidateData(orgId: string, id: string, data: any) {
+  static async updateCandidateData(
+    orgId: string,
+    id: string,
+    data: Partial<CreateCandidateInput & { bankAccountNumber?: string; bankIFSC?: string; accountHolderName?: string; bankName?: string }>
+  ) {
     const candidate = await this.getCandidateById(orgId, id);
-    const existingFormData = (candidate.formData as any) || {};
+    const existingFormData = parseFormData(candidate.formData);
 
-    const updatedFormData = {
+    const updatedFormData: CandidateFormData = {
       ...existingFormData,
       ...data,
       bankDetails: {
-        ...(existingFormData.bankDetails || {}),
-        accountHolderName: data.accountHolderName || existingFormData.bankDetails?.accountHolderName,
-        accountNumber: data.bankAccountNumber || data.accountNumber || existingFormData.bankDetails?.accountNumber,
-        ifscCode: data.bankIFSC || data.ifscCode || existingFormData.bankDetails?.ifscCode,
-        bankName: data.bankName || existingFormData.bankDetails?.bankName
+        ...(existingFormData.bankDetails ?? {}),
+        accountHolderName: data.accountHolderName ?? existingFormData.bankDetails?.accountHolderName,
+        accountNumber: data.bankAccountNumber ?? existingFormData.bankDetails?.accountNumber,
+        ifscCode: data.bankIFSC ?? existingFormData.bankDetails?.ifscCode,
+        bankName: data.bankName ?? existingFormData.bankDetails?.bankName
       }
     };
 
     return prisma.onboardingCandidate.update({
       where: { id: candidate.id },
       data: {
-        firstName: data.firstName || candidate.firstName,
-        lastName: data.lastName !== undefined ? data.lastName : candidate.lastName,
-        personalEmail: data.personalEmail || data.email || candidate.personalEmail,
-        mobileNumber: data.mobileNumber || candidate.mobileNumber,
+        firstName: data.firstName ?? candidate.firstName,
+        lastName: data.lastName ?? candidate.lastName,
+        personalEmail: data.personalEmail ?? data.email ?? candidate.personalEmail,
+        mobileNumber: data.mobileNumber ?? candidate.mobileNumber,
         departmentId: data.departmentId !== undefined ? data.departmentId : candidate.departmentId,
         annualPackage: data.annualPackage !== undefined ? Number(data.annualPackage) : candidate.annualPackage,
         hiredDate: data.hiredDate ? new Date(data.hiredDate) : candidate.hiredDate,
-        formData: updatedFormData
+        formData: { ...updatedFormData } as unknown as Prisma.InputJsonValue
       },
       include: {
         department: true,
@@ -666,14 +706,15 @@ export class OnboardingService {
 
   static async requestChanges(orgId: string, id: string, reviewerId: string, feedback: string) {
     const candidate = await this.getCandidateById(orgId, id);
-    const formData = (candidate.formData as any) || {};
+    const formData = parseFormData(candidate.formData);
 
-    formData.changeRequests = formData.changeRequests || [];
-    formData.changeRequests.push({
+    const changeRequests = formData.changeRequests ?? [];
+    changeRequests.push({
       feedback,
       requestedAt: new Date().toISOString(),
       requestedBy: reviewerId
     });
+    formData.changeRequests = changeRequests;
 
     return prisma.onboardingCandidate.update({
       where: { id: candidate.id },
@@ -681,7 +722,7 @@ export class OnboardingService {
         status: 'UNDER_REVIEW',
         reviewedById: reviewerId,
         reviewedAt: new Date(),
-        formData
+        formData: { ...formData } as unknown as Prisma.InputJsonValue
       }
     });
   }

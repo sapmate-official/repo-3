@@ -12,7 +12,7 @@ export interface DepartmentCreateInput {
   status?: boolean;
 }
 
-export interface DepartmentUpdateInput extends Partial<DepartmentCreateInput> {}
+export type DepartmentUpdateInput = Partial<DepartmentCreateInput>;
 
 export class DepartmentService {
   static async listDepartments(orgId: string) {
@@ -149,9 +149,9 @@ export class DepartmentService {
         name: data.name,
         description: data.description,
         code: data.code,
-        headId: data.headId || null,
-        parentId: data.parentId || null,
-        location: data.location || null,
+        headId: data.headId ?? null,
+        parentId: data.parentId ?? null,
+        location: data.location ?? null,
         budget: data.budget ?? null,
         status: data.status ?? true
       },

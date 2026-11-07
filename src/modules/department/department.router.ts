@@ -19,8 +19,15 @@ departmentRouter.use(authenticateAny);
 departmentRouter.get('/', requireOrgScope(), DepartmentController.list);
 departmentRouter.get('/org/:orgId', validate({ params: departmentOrgParamSchema }), requireOrgScope(), DepartmentController.list);
 
+// Get department employees
+departmentRouter.get('/:id/employees', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.getEmployees);
+
 // Get single department
 departmentRouter.get('/:id', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.getById);
+
+// Assign / change department head
+departmentRouter.put('/:id/head/:userId', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.setHead);
+departmentRouter.patch('/:id/head/:userId', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.setHead);
 
 // Create department
 departmentRouter.post('/', validate({ body: createDepartmentSchema }), requireOrgScope(), DepartmentController.create);

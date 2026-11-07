@@ -136,7 +136,50 @@ export class EmailService {
     });
   }
 
-  // 2. Candidate Onboarding Approval Notification
+  // 2. Candidate Onboarding Invitation
+  static async sendCandidateInviteEmail(candidate: {
+    email: string;
+    firstName: string;
+    lastName?: string | null;
+    companyName: string;
+    token: string;
+    jobTitle?: string | null;
+  }): Promise<boolean> {
+    const candidateName = `${candidate.firstName} ${candidate.lastName || ''}`.trim();
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5174';
+    const onboardingUrl = `${clientUrl.replace(/\/$/, '')}/onboarding/${candidate.token}`;
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
+          <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 100%); padding: 30px 20px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Welcome to ${candidate.companyName}</h1>
+          </div>
+          <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
+            <p>Dear <strong>${candidateName}</strong>,</p>
+            <p>You have been invited to complete your onboarding with <strong>${candidate.companyName}</strong>.</p>
+            ${candidate.jobTitle ? `<p><strong>Role / Position:</strong> ${candidate.jobTitle}</p>` : ''}
+            <p>Please use the secure link below to verify your invitation and submit your onboarding details.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${onboardingUrl}" style="background-color: #2E7D32; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+                Complete Onboarding
+              </a>
+            </div>
+            <p style="font-size: 13px; color: #6b7280;">This invitation link expires in 14 days. If you were not expecting this email, you can safely ignore it.</p>
+            <p>Best regards,<br/><strong>HR Operations - ${candidate.companyName}</strong></p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.sendEmail({
+      to: [{ email: candidate.email, name: candidateName }],
+      subject: `Complete your onboarding with ${candidate.companyName}`,
+      htmlContent
+    });
+  }
+
+  // 3. Candidate Onboarding Approval Notification
   static async sendCandidateApprovedEmail(candidate: {
     email: string;
     firstName: string;
@@ -172,7 +215,7 @@ export class EmailService {
     });
   }
 
-  // 3. New Provisioned Employee Welcome Email
+  // 4. New Provisioned Employee Welcome Email
   static async sendNewEmployeeWelcomeEmail(params: {
     email: string;
     name: string;

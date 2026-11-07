@@ -4,6 +4,7 @@ import { organizationRouter } from '../modules/organization/organization.router.
 import { departmentRouter } from '../modules/department/department.router.js';
 import { employeeRouter } from '../modules/employee/employee.router.js';
 import { onboardingRouter } from '../modules/onboarding/onboarding.router.js';
+import { dashboardRouter } from '../modules/dashboard/dashboard.router.js';
 import { publicRouter } from '../modules/public/public.router.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -16,9 +17,15 @@ export const v2Router = Router();
 // Public endpoints (no auth required)
 v2Router.use('/public', publicRouter);
 
+// Dashboard endpoints
+v2Router.use('/dashboard', dashboardRouter);
+v2Router.use('/screen/dashboard', dashboardRouter);
+
 // Organization endpoints
 v2Router.get('/organization/employee-list/:orgId', authenticateAny, EmployeeController.listLegacy);
 v2Router.get('/organization/employees/:orgId', authenticateAny, EmployeeController.listLegacy);
+v2Router.get('/organization/employees/employee-id/:orgId', authenticateAny, EmployeeController.generateId);
+v2Router.get('/organization/employees/employee-id/:orgId/check/:employeeId', authenticateAny, EmployeeController.checkId);
 v2Router.use('/organization', organizationRouter);
 
 // Department endpoints
@@ -33,6 +40,12 @@ v2Router.use('/employees', employeeRouter);
 v2Router.use('/employee', employeeRouter);
 
 // User profile & management endpoints (/api/v2/user/...)
+v2Router.get('/user/user-list', authenticateAny, EmployeeController.listLegacy);
+v2Router.get('/user/all', authenticateAny, EmployeeController.listLegacy);
+v2Router.get('/user/org/:orgId', authenticateAny, EmployeeController.listLegacy);
+v2Router.get('/user/subordinates/:userId', authenticateAny, EmployeeController.listSubordinates);
+v2Router.get('/user/:id/permissions', authenticateAny, EmployeeController.getPermissions);
+v2Router.put('/user/:id/department/:departmentId', authenticateAny, EmployeeController.assignDepartment);
 v2Router.get('/user/:id', authenticateAny, EmployeeController.getById);
 v2Router.put('/user/:id', authenticateAny, EmployeeController.update);
 v2Router.patch('/user/:id', authenticateAny, EmployeeController.update);

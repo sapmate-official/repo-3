@@ -135,7 +135,7 @@ export class OnboardingService {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const tokenExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
 
-    return prisma.onboardingCandidate.create({
+    const candidate = await prisma.onboardingCandidate.create({
       data: {
         orgId,
         createdById,
@@ -159,9 +159,55 @@ export class OnboardingService {
       },
       include: {
         department: true,
-        manager: true
+        manager: true,
+        organization: {
+          select: { id: true, name: true }
+        }
       }
     });
+
+    EmailService.sendCandidateInviteEmail({
+      email: candidate.personalEmail || candidate.email,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      companyName: candidate.organization.name,
+      token: candidate.verificationToken!,
+      jobTitle: (candidate.formData as any)?.jobTitle || null
+    }).catch(() => {});
+
+    return candidate;
+  }
+
+  static async sendInvitation(orgId: string, id: string) {
+    const candidate = await this.getCandidateById(orgId, id);
+
+    let token = candidate.verificationToken;
+    let tokenExpiry = candidate.tokenExpiry;
+
+    if (!token || (tokenExpiry && tokenExpiry < new Date())) {
+      token = crypto.randomBytes(32).toString('hex');
+      tokenExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      await prisma.onboardingCandidate.update({
+        where: { id: candidate.id },
+        data: { verificationToken: token, tokenExpiry }
+      });
+    }
+
+    const sent = await EmailService.sendCandidateInviteEmail({
+      email: candidate.personalEmail || candidate.email,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      companyName: candidate.organization.name,
+      token,
+      jobTitle: (candidate.formData as any)?.jobTitle || null
+    });
+
+    return {
+      message: sent
+        ? 'Invitation sent successfully'
+        : 'Invitation email could not be dispatched because the email service is unavailable',
+      sent
+    };
   }
 
   // Public candidate self-service endpoint: verify token

@@ -8,6 +8,7 @@ export interface ListEmployeesOptions {
   limit?: number;
   search?: string;
   departmentId?: string;
+  managerId?: string;
   roleId?: string;
   status?: 'active' | 'inactive';
   sortBy?: string;
@@ -65,6 +66,10 @@ export class EmployeeService {
 
     if (options.departmentId) {
       where.departmentId = options.departmentId;
+    }
+
+    if (options.managerId) {
+      where.managerId = options.managerId;
     }
 
     if (options.roleId) {
@@ -386,6 +391,24 @@ export class EmployeeService {
       }
     }
 
+    if (input.departmentId) {
+      const dept = await prisma.department.findFirst({
+        where: { id: input.departmentId, orgId }
+      });
+      if (!dept) {
+        throw new AppError('Selected department not found in your organization.', 400, 'INVALID_DEPARTMENT');
+      }
+    }
+
+    if (input.managerId) {
+      const manager = await prisma.user.findFirst({
+        where: { id: input.managerId, orgId }
+      });
+      if (!manager) {
+        throw new AppError('Selected reporting manager not found in your organization.', 400, 'INVALID_MANAGER');
+      }
+    }
+
     const annualPackage = input.annualPackage !== undefined ? input.annualPackage : undefined;
     const monthlySalary = input.monthlySalary !== undefined ? input.monthlySalary : undefined;
 
@@ -512,6 +535,61 @@ export class EmployeeService {
     });
 
     return { message: 'Employee deleted successfully', employeeId: employee.employeeId };
+  }
+
+  static async listSubordinates(orgId: string, managerId: string) {
+    const users = await prisma.user.findMany({
+      where: { orgId, managerId },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      include: {
+        department: {
+          select: { id: true, name: true, code: true }
+        },
+        manager: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            businessEmail: true,
+            personalEmail: true,
+            jobTitle: true,
+            employeeId: true
+          }
+        },
+        roles: {
+          include: {
+            role: {
+              select: { id: true, name: true }
+            }
+          }
+        }
+      }
+    });
+
+    return users.map((u) => {
+      const { hashedPassword: _p, refreshToken: _rt, ...safeUser } = u;
+      return {
+        ...safeUser,
+        name: [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email,
+        personalEmail: u.personalEmail || u.email,
+        businessEmail: u.businessEmail || null
+      };
+    });
+  }
+
+  static async getEmployeePermissions(orgId: string, id: string) {
+    const employee = (await this.getEmployeeById(orgId, id)) as any;
+    const permissions = new Map<string, any>();
+
+    for (const userRole of employee.roles ?? []) {
+      for (const rolePermission of userRole.role?.permissions ?? []) {
+        if (rolePermission.permission?.id) {
+          permissions.set(rolePermission.permission.id, rolePermission.permission);
+        }
+      }
+    }
+
+    return Array.from(permissions.values());
   }
 
   static async generateEmployeeId(orgId: string) {

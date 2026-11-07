@@ -24,7 +24,7 @@ export class OnboardingController {
   // GET /api/v1/onboarding/:id OR GET /api/v2/onboarding/:id
   static async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -40,7 +40,7 @@ export class OnboardingController {
   // GET /api/v2/onboarding/:id/review
   static async getReviewData(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -69,10 +69,25 @@ export class OnboardingController {
     }
   }
 
+  // POST /api/v2/onboarding/:id/invite
+  static async sendInvitation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      if (!orgId) {
+        throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
+      }
+
+      const result = await OnboardingService.sendInvitation(orgId, strParam(req.params.id));
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // PUT /api/v2/onboarding/:id
   static async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -88,7 +103,7 @@ export class OnboardingController {
   // POST /api/v2/onboarding/:id/mark-review
   static async markUnderReview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -104,7 +119,7 @@ export class OnboardingController {
   // POST /api/v1/onboarding/:id/verify-document
   static async verifyDocument(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -128,7 +143,7 @@ export class OnboardingController {
   // POST /api/v2/onboarding/:id/approve
   static async approve(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -144,7 +159,7 @@ export class OnboardingController {
   // POST /api/v2/onboarding/:id/request-changes
   static async requestChanges(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -161,7 +176,7 @@ export class OnboardingController {
   // POST /api/v2/onboarding/:id/reject
   static async reject(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -178,7 +193,7 @@ export class OnboardingController {
   // POST /api/v2/onboarding/:id/complete
   static async complete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -194,7 +209,7 @@ export class OnboardingController {
   // DELETE /api/v2/onboarding/:id
   static async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }

@@ -188,6 +188,24 @@ export class DepartmentService {
       }
     }
 
+    if (data.headId) {
+      const headUser = await prisma.user.findFirst({
+        where: { id: data.headId, orgId }
+      });
+      if (!headUser) {
+        throw new AppError('Assigned department head not found in your organization.', 400, 'INVALID_DEPARTMENT_HEAD');
+      }
+    }
+
+    if (data.parentId) {
+      const parentDept = await prisma.department.findFirst({
+        where: { id: data.parentId, orgId }
+      });
+      if (!parentDept) {
+        throw new AppError('Parent department not found in your organization.', 400, 'INVALID_PARENT_DEPARTMENT');
+      }
+    }
+
     return prisma.department.update({
       where: { id: departmentId },
       data: {

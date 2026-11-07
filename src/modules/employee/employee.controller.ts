@@ -31,8 +31,60 @@ export class EmployeeController {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
-      const result = await EmployeeService.listEmployees(orgId, { limit: 100 });
+      const result = await EmployeeService.listEmployees(orgId, {
+        ...(req.query as Record<string, any>),
+        limit: Math.min(100, Number(req.query.limit) || 100)
+      });
       res.status(200).json(result.data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async listSubordinates(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || strParam(req.headers['x-org-id']) || req.user?.orgId || '';
+      if (!orgId && !req.user?.isSuperAdmin) {
+        throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
+      }
+
+      const managerId = strParam(req.params.userId) || strParam(req.query.managerId);
+      if (!managerId) {
+        throw new AppError('Manager ID is required', 400, 'MANAGER_ID_REQUIRED');
+      }
+
+      const subordinates = await EmployeeService.listSubordinates(orgId, managerId);
+      res.status(200).json(subordinates);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getPermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId || '';
+      if (!orgId) {
+        throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
+      }
+
+      const permissions = await EmployeeService.getEmployeePermissions(orgId, strParam(req.params.id));
+      res.status(200).json(permissions);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async assignDepartment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId || '';
+      if (!orgId) {
+        throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
+      }
+
+      const employee = await EmployeeService.updateEmployee(orgId, strParam(req.params.id), {
+        departmentId: strParam(req.params.departmentId)
+      });
+      res.status(200).json(employee);
     } catch (error) {
       next(error);
     }
@@ -109,7 +161,7 @@ export class EmployeeController {
 
   static async generateId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -123,7 +175,7 @@ export class EmployeeController {
 
   static async checkId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }

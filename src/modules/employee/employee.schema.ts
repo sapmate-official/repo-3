@@ -5,6 +5,7 @@ export const listEmployeesQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().trim().optional(),
   departmentId: z.string().trim().optional(),
+  managerId: z.string().trim().optional(),
   roleId: z.string().trim().optional(),
   status: z.enum(['active', 'inactive']).optional(),
   sortBy: z.enum(['createdAt', 'hiredDate', 'firstName', 'lastName', 'employeeId', 'annualPackage', 'monthlySalary']).default('createdAt'),

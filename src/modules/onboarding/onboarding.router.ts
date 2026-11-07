@@ -24,6 +24,7 @@ onboardingRouter.get('/:id/review', requireOrgScope(), OnboardingController.getR
 onboardingRouter.get('/:id', requireOrgScope(), OnboardingController.getById);
 
 onboardingRouter.post('/', requireOrgScope(), OnboardingController.create);
+onboardingRouter.post('/:id/invite', requireOrgScope(), OnboardingController.sendInvitation);
 onboardingRouter.put('/:id', requireOrgScope(), OnboardingController.update);
 onboardingRouter.delete('/:id', requireOrgScope(), OnboardingController.delete);
 

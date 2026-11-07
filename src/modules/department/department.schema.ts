@@ -18,6 +18,11 @@ export const departmentIdParamSchema = z.object({
   id: z.string().trim().min(1, 'Department ID is required')
 });
 
+export const departmentHeadParamSchema = z.object({
+  id: z.string().trim().min(1, 'Department ID is required'),
+  userId: z.string().trim().min(1, 'User ID is required')
+});
+
 export const departmentOrgParamSchema = z.object({
   orgId: z.string().trim().min(1, 'Organization ID is required')
 });

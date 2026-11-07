@@ -97,6 +97,35 @@ export class OnboardingService {
   }
 
   static async createCandidate(orgId: string, createdById: string, input: CreateCandidateInput) {
+    const actor = await prisma.user.findFirst({
+      where: { id: createdById, orgId },
+      select: { id: true }
+    });
+
+    let effectiveCreatedById = actor?.id;
+    if (!effectiveCreatedById) {
+      const orgAdmin = await prisma.organization_admin.findFirst({
+        where: { orgId },
+        select: { adminId: true }
+      });
+      effectiveCreatedById =
+        orgAdmin?.adminId ??
+        (
+          await prisma.user.findFirst({
+            where: { orgId },
+            select: { id: true }
+          })
+        )?.id;
+    }
+
+    if (!effectiveCreatedById) {
+      throw new AppError(
+        'Organization has no user available to own the onboarding record.',
+        400,
+        'ONBOARDING_OWNER_MISSING'
+      );
+    }
+
     const email = input.email.toLowerCase().trim();
 
     // Check if user already exists in organization
@@ -138,7 +167,7 @@ export class OnboardingService {
     const candidate = await prisma.onboardingCandidate.create({
       data: {
         orgId,
-        createdById,
+        createdById: effectiveCreatedById,
         email,
         personalEmail: input.personalEmail || email,
         businessEmail: input.businessEmail || null,

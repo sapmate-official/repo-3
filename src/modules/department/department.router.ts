@@ -7,6 +7,7 @@ import {
   createDepartmentSchema,
   updateDepartmentSchema,
   departmentIdParamSchema,
+  departmentHeadParamSchema,
   departmentOrgParamSchema
 } from './department.schema.js';
 
@@ -26,8 +27,8 @@ departmentRouter.get('/:id/employees', validate({ params: departmentIdParamSchem
 departmentRouter.get('/:id', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.getById);
 
 // Assign / change department head
-departmentRouter.put('/:id/head/:userId', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.setHead);
-departmentRouter.patch('/:id/head/:userId', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.setHead);
+departmentRouter.put('/:id/head/:userId', validate({ params: departmentHeadParamSchema }), requireOrgScope(), DepartmentController.setHead);
+departmentRouter.patch('/:id/head/:userId', validate({ params: departmentHeadParamSchema }), requireOrgScope(), DepartmentController.setHead);
 
 // Create department
 departmentRouter.post('/', validate({ body: createDepartmentSchema }), requireOrgScope(), DepartmentController.create);

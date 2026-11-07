@@ -6,6 +6,10 @@ import { employeeRouter } from '../modules/employee/employee.router.js';
 import { onboardingRouter } from '../modules/onboarding/onboarding.router.js';
 import { dashboardRouter } from '../modules/dashboard/dashboard.router.js';
 import { publicRouter } from '../modules/public/public.router.js';
+import { roleRouter } from '../modules/role/role.router.js';
+import { permissionRouter } from '../modules/permission/permission.router.js';
+import { rolePermissionRouter } from '../modules/role/rolePermission.router.js';
+import { userRoleRouter } from '../modules/role/userRole.router.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
 export const v2Router = Router();
@@ -34,6 +38,14 @@ v2Router.use('/departments', departmentRouter);
 
 // Onboarding endpoints
 v2Router.use('/onboarding', onboardingRouter);
+
+// Role & Permission endpoints
+v2Router.use('/role', roleRouter);
+v2Router.use('/roles', roleRouter);
+v2Router.use('/permission', permissionRouter);
+v2Router.use('/permissions', permissionRouter);
+v2Router.use('/role-permission', rolePermissionRouter);
+v2Router.use('/user-role', userRoleRouter);
 
 // Employee endpoints
 v2Router.use('/employees', employeeRouter);

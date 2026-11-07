@@ -9,6 +9,7 @@ import { dashboardRouter } from '../modules/dashboard/dashboard.router.js';
 import { publicRouter } from '../modules/public/public.router.js';
 import { roleRouter } from '../modules/role/role.router.js';
 import { permissionRouter } from '../modules/permission/permission.router.js';
+import attendanceRouter from '../modules/attendance/attendance.router.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
 export const v1Router = Router();
@@ -18,6 +19,9 @@ v1Router.use('/public', publicRouter);
 
 // Dashboard module
 v1Router.use('/dashboard', dashboardRouter);
+
+// Attendance module
+v1Router.use('/attendance', attendanceRouter);
 
 // Mount auth module under both /general (100% frontend backward compatible) and /auth
 v1Router.use('/general', authRouter);

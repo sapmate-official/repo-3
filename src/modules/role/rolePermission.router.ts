@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { authenticateAny } from '../../middleware/auth.js';
+import { resolveOrgContext } from './roleContext.js';
+import { AppError } from '../../util/errors.js';
 import prisma from '../../db/prisma.js';
 
 export const rolePermissionRouter = Router();
@@ -12,6 +14,17 @@ interface RolePermissionBody {
   permissions?: string[];
 }
 
+const requireScopedRole = async (roleId: string, orgId?: string): Promise<void> => {
+  const role = await prisma.role.findFirst({
+    where: { id: roleId, ...(orgId ? { orgId } : {}) },
+    select: { id: true }
+  });
+
+  if (!role) {
+    throw new AppError('Role not found in your organization', 404, 'ROLE_NOT_FOUND');
+  }
+};
+
 rolePermissionRouter.post('/', async (req, res, next) => {
   try {
     const body = req.body as RolePermissionBody;
@@ -21,8 +34,11 @@ rolePermissionRouter.post('/', async (req, res, next) => {
     const ids: string[] = permissionIds.length > 0 ? permissionIds : permissions;
 
     if (!roleId) {
-      return res.status(400).json({ error: 'roleId is required' });
+      throw new AppError('roleId is required', 400, 'ROLE_ID_REQUIRED');
     }
+
+    const orgId = resolveOrgContext(req);
+    await requireScopedRole(roleId, orgId);
 
     if (ids.length > 0) {
       await prisma.rolePermission.createMany({
@@ -47,8 +63,11 @@ rolePermissionRouter.delete('/', async (req, res, next) => {
     const permissionIds = body.permissionIds ?? [];
 
     if (!roleId) {
-      return res.status(400).json({ error: 'roleId is required' });
+      throw new AppError('roleId is required', 400, 'ROLE_ID_REQUIRED');
     }
+
+    const orgId = resolveOrgContext(req);
+    await requireScopedRole(roleId, orgId);
 
     await prisma.rolePermission.deleteMany({
       where: {

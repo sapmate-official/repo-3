@@ -10,6 +10,7 @@ import { roleRouter } from '../modules/role/role.router.js';
 import { permissionRouter } from '../modules/permission/permission.router.js';
 import { rolePermissionRouter } from '../modules/role/rolePermission.router.js';
 import { userRoleRouter } from '../modules/role/userRole.router.js';
+import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
 export const v2Router = Router();
@@ -57,6 +58,11 @@ v2Router.get('/user/all', authenticateAny, EmployeeController.listLegacy);
 v2Router.get('/user/org/:orgId', authenticateAny, EmployeeController.listLegacy);
 v2Router.get('/user/subordinates/:userId', authenticateAny, EmployeeController.listSubordinates);
 v2Router.get('/user/:id/permissions', authenticateAny, EmployeeController.getPermissions);
+v2Router.put(
+  '/user/:userId/role/:prevRoleId/:roleId',
+  authenticateAny,
+  UserRoleController.replaceLegacy
+);
 v2Router.put('/user/:id/department/:departmentId', authenticateAny, EmployeeController.assignDepartment);
 v2Router.get('/user/:id', authenticateAny, EmployeeController.getById);
 v2Router.put('/user/:id', authenticateAny, EmployeeController.update);

@@ -17,6 +17,17 @@ export interface UpdateRoleInput {
 }
 
 export class RoleService {
+  private static async ensureOrganization(orgId: string): Promise<void> {
+    const organization = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { id: true }
+    });
+
+    if (!organization) {
+      throw new AppError('Organization not found', 404, 'ORG_NOT_FOUND');
+    }
+  }
+
   /**
    * List all roles for an organization.
    * If the organization has no roles, seed standard defaults automatically.
@@ -25,6 +36,8 @@ export class RoleService {
     if (!orgId) {
       throw new AppError('Organization ID is required', 400, 'ORG_ID_REQUIRED');
     }
+
+    await this.ensureOrganization(orgId);
 
     let roles = await prisma.role.findMany({
       where: { orgId },
@@ -81,7 +94,7 @@ export class RoleService {
   /**
    * Get role by ID
    */
-  static async getRoleById(orgId: string, id: string) {
+  static async getRoleById(orgId: string | undefined, id: string) {
     const role = await prisma.role.findFirst({
       where: { id, ...(orgId ? { orgId } : {}) },
       include: {
@@ -110,6 +123,8 @@ export class RoleService {
     if (!data.name) {
       throw new AppError('Role name is required', 400, 'ROLE_NAME_REQUIRED');
     }
+
+    await this.ensureOrganization(orgId);
 
     const existing = await prisma.role.findFirst({
       where: { orgId, name: data.name }
@@ -150,7 +165,7 @@ export class RoleService {
   /**
    * Update role
    */
-  static async updateRole(orgId: string, roleId: string, data: UpdateRoleInput) {
+  static async updateRole(orgId: string | undefined, roleId: string, data: UpdateRoleInput) {
     const existing = await prisma.role.findFirst({
       where: { id: roleId, ...(orgId ? { orgId } : {}) }
     });
@@ -211,7 +226,7 @@ export class RoleService {
   /**
    * Delete role
    */
-  static async deleteRole(orgId: string, roleId: string) {
+  static async deleteRole(orgId: string | undefined, roleId: string) {
     const existing = await prisma.role.findFirst({
       where: { id: roleId, ...(orgId ? { orgId } : {}) }
     });
@@ -232,8 +247,14 @@ export class RoleService {
   /**
    * Add permissions to role
    */
-  static async addPermissions(roleId: string, permissionIds: string[]) {
-    const role = await prisma.role.findUnique({ where: { id: roleId } });
+  static async addPermissions(
+    orgId: string | undefined,
+    roleId: string,
+    permissionIds: string[]
+  ) {
+    const role = await prisma.role.findFirst({
+      where: { id: roleId, ...(orgId ? { orgId } : {}) }
+    });
     if (!role) {
       throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
     }
@@ -263,7 +284,19 @@ export class RoleService {
   /**
    * Remove permissions from role
    */
-  static async removePermissions(roleId: string, permissionIds: string[]) {
+  static async removePermissions(
+    orgId: string | undefined,
+    roleId: string,
+    permissionIds: string[]
+  ) {
+    const role = await prisma.role.findFirst({
+      where: { id: roleId, ...(orgId ? { orgId } : {}) },
+      select: { id: true }
+    });
+    if (!role) {
+      throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
+    }
+
     await prisma.rolePermission.deleteMany({
       where: {
         roleId,

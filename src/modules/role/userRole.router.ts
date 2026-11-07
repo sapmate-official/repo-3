@@ -31,9 +31,16 @@ userRoleRouter.get('/user/:userId', async (req, res, next) => {
   }
 });
 
+interface UserRoleBody {
+  userId?: string;
+  roleId?: string;
+}
+
 userRoleRouter.post('/', async (req, res, next) => {
   try {
-    const { userId, roleId } = req.body;
+    const body = req.body as UserRoleBody;
+    const userId = body.userId;
+    const roleId = body.roleId;
     if (!userId || !roleId) {
       return res.status(400).json({ error: 'userId and roleId are required' });
     }

@@ -6,9 +6,18 @@ export const rolePermissionRouter = Router();
 
 rolePermissionRouter.use(authenticateAny);
 
+interface RolePermissionBody {
+  roleId?: string;
+  permissionIds?: string[];
+  permissions?: string[];
+}
+
 rolePermissionRouter.post('/', async (req, res, next) => {
   try {
-    const { roleId, permissionIds = [], permissions = [] } = req.body;
+    const body = req.body as RolePermissionBody;
+    const roleId = body.roleId;
+    const permissionIds = body.permissionIds ?? [];
+    const permissions = body.permissions ?? [];
     const ids: string[] = permissionIds.length > 0 ? permissionIds : permissions;
 
     if (!roleId) {
@@ -33,7 +42,9 @@ rolePermissionRouter.post('/', async (req, res, next) => {
 
 rolePermissionRouter.delete('/', async (req, res, next) => {
   try {
-    const { roleId, permissionIds = [] } = req.body;
+    const body = req.body as RolePermissionBody;
+    const roleId = body.roleId;
+    const permissionIds = body.permissionIds ?? [];
 
     if (!roleId) {
       return res.status(400).json({ error: 'roleId is required' });

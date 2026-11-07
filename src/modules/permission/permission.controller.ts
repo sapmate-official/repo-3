@@ -1,10 +1,15 @@
 import type { Request, Response, NextFunction } from 'express';
-import { PermissionService } from './permission.service.js';
+import { PermissionService, type CreatePermissionInput, type UpdatePermissionInput } from './permission.service.js';
 import { AppError } from '../../util/errors.js';
 
 const strParam = (val: unknown): string => {
-  if (Array.isArray(val)) return val[0] || '';
-  if (typeof val === 'string' && val !== 'undefined' && val !== 'null') return val;
+  if (Array.isArray(val)) {
+    const first: unknown = val[0];
+    return typeof first === 'string' ? first : '';
+  }
+  if (typeof val === 'string' && val !== 'undefined' && val !== 'null') {
+    return val;
+  }
   return '';
 };
 
@@ -31,7 +36,7 @@ export class PermissionController {
 
   static async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await PermissionService.create(req.body);
+      const permission = await PermissionService.create(req.body as CreatePermissionInput);
       res.status(201).json(permission);
     } catch (error) {
       next(error);
@@ -40,9 +45,10 @@ export class PermissionController {
 
   static async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = strParam(req.params.id) || strParam(req.body.id);
+      const body = req.body as UpdatePermissionInput & { id?: string };
+      const id = strParam(req.params.id) || strParam(body.id);
       if (!id) throw new AppError('Permission ID required', 400, 'PARAM_MISSING');
-      const updated = await PermissionService.update(id, req.body);
+      const updated = await PermissionService.update(id, body);
       res.status(200).json(updated);
     } catch (error) {
       next(error);
@@ -51,7 +57,8 @@ export class PermissionController {
 
   static async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = strParam(req.params.id) || strParam(req.body.id);
+      const body = req.body as { id?: string };
+      const id = strParam(req.params.id) || strParam(body.id);
       if (!id) throw new AppError('Permission ID required', 400, 'PARAM_MISSING');
       const result = await PermissionService.delete(id);
       res.status(200).json(result);

@@ -11,7 +11,7 @@ export class DashboardController {
 
       const summary = await DashboardService.getSummary({
         id: req.user.id,
-        orgId: req.user.orgId || '',
+        orgId: req.user.orgId ?? '',
         isSuperAdmin: req.user.isSuperAdmin,
         roles: req.user.roles,
         permissions: req.user.permissions

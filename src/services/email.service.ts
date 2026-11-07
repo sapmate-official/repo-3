@@ -19,13 +19,14 @@ export class EmailService {
   private static readonly BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
 
   private static getBrevoApiKey(): string | undefined {
-    return process.env.BREVO_API_KEY?.trim() || undefined;
+    const key = process.env.BREVO_API_KEY?.trim();
+    return key && key.length > 0 ? key : undefined;
   }
 
   private static getDefaultSender() {
     return {
-      name: process.env.SENDER_NAME || 'Alkaa HRMS',
-      email: process.env.SENDER_EMAIL || 'support@alkaa.online'
+      name: process.env.SENDER_NAME ?? 'Alkaa HRMS',
+      email: process.env.SENDER_EMAIL ?? 'support@alkaa.online'
     };
   }
 
@@ -39,7 +40,7 @@ export class EmailService {
       return false;
     }
 
-    const sender = options.sender || this.getDefaultSender();
+    const sender = options.sender ?? this.getDefaultSender();
 
     try {
       const response = await fetch(this.BREVO_URL, {
@@ -63,7 +64,7 @@ export class EmailService {
         return false;
       }
 
-      const result = await response.json();
+      const result = (await response.json()) as unknown;
       logger.info({ result, to: options.to.map((r) => r.email) }, 'Email successfully dispatched via Brevo');
       return true;
     } catch (error) {
@@ -79,7 +80,7 @@ export class EmailService {
     phoneNumber: string;
     email: string;
   }): Promise<void> {
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5174';
+    const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5174';
 
     // A. Send confirmation email to requester
     const requesterHtml = `
@@ -125,6 +126,7 @@ export class EmailService {
         <p><strong>Company:</strong> ${input.company}</p>
         <p><strong>Phone:</strong> ${input.phoneNumber}</p>
         <p><strong>Email:</strong> <a href="mailto:${input.email}">${input.email}</a></p>
+        <p><a href="${clientUrl}/p/onboarding" style="display:inline-block;padding:8px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;">Review in Onboarding Portal</a></p>
         <p><em>Submitted at: ${new Date().toLocaleString()}</em></p>
       </div>
     `;
@@ -145,8 +147,8 @@ export class EmailService {
     token: string;
     jobTitle?: string | null;
   }): Promise<boolean> {
-    const candidateName = `${candidate.firstName} ${candidate.lastName || ''}`.trim();
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5174';
+    const candidateName = `${candidate.firstName} ${candidate.lastName ?? ''}`.trim();
+    const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5174';
     const onboardingUrl = `${clientUrl.replace(/\/$/, '')}/onboarding/${candidate.token}`;
 
     const htmlContent = `
@@ -187,7 +189,7 @@ export class EmailService {
     companyName: string;
     jobTitle?: string | null;
   }): Promise<void> {
-    const candidateName = `${candidate.firstName} ${candidate.lastName || ''}`.trim();
+    const candidateName = `${candidate.firstName} ${candidate.lastName ?? ''}`.trim();
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
         <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
@@ -224,7 +226,7 @@ export class EmailService {
     companyName: string;
     loginUrl?: string;
   }): Promise<void> {
-    const loginUrl = params.loginUrl || process.env.CLIENT_URL || 'http://localhost:5174';
+    const loginUrl = params.loginUrl ?? process.env.CLIENT_URL ?? 'http://localhost:5174';
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
         <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">

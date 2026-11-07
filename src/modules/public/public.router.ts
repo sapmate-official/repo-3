@@ -10,7 +10,7 @@ const demoRequestSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   company: z.string().trim().min(1, 'Company is required'),
   phoneNumber: z.string().trim().min(1, 'Phone number is required'),
-  email: z.string().trim().email('Valid email is required')
+  email: z.email('Valid email is required')
 });
 
 export const publicRouter = Router();
@@ -20,13 +20,13 @@ publicRouter.post(
   validate({ body: demoRequestSchema }),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { name, company, phoneNumber, email } = req.body;
+      const { name, company, phoneNumber, email } = req.body as z.infer<typeof demoRequestSchema>;
       logger.info({ name, company, email, phoneNumber }, 'Processing public onboarding submission');
 
       const normalizedEmail = email.toLowerCase().trim();
       const nameParts = name.trim().split(' ');
-      const firstName = nameParts[0] || name;
-      const lastName = nameParts.slice(1).join(' ') || '';
+      const firstName = nameParts[0] ?? name;
+      const lastName = nameParts.slice(1).join(' ');
 
       // 1. Locate matching organization or active tenant with users
       let organization = await prisma.organization.findFirst({
@@ -39,19 +39,17 @@ publicRouter.post(
         include: { users: { take: 1 } }
       });
 
-      if (!organization) {
-        // Fall back to the active organization that actually has users
-        organization = await prisma.organization.findFirst({
-          where: { users: { some: {} } },
-          include: { users: { take: 1 } }
-        });
-      }
+      // Fall back to the active organization that actually has users
+      organization ??= await prisma.organization.findFirst({
+        where: { users: { some: {} } },
+        include: { users: { take: 1 } }
+      });
 
       // 2. Automatically create or update candidate in Onboarding Management
       if (organization) {
         const adminUser =
-          organization.users[0] ||
-          (await prisma.user.findFirst({ where: { orgId: organization.id } })) ||
+          organization.users[0] ??
+          (await prisma.user.findFirst({ where: { orgId: organization.id } })) ??
           (await prisma.user.findFirst());
 
         if (adminUser) {
@@ -69,7 +67,7 @@ publicRouter.post(
                 status: 'FORM_SUBMITTED',
                 formSubmittedAt: new Date(),
                 formData: {
-                  ...((existingCandidate.formData as Record<string, unknown>) || {}),
+                  ...((existingCandidate.formData as Record<string, unknown> | null) ?? {}),
                   company,
                   phoneNumber,
                   source: 'Public Web Application / Demo Request',

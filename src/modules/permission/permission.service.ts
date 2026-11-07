@@ -1,6 +1,22 @@
 import prisma from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 
+export interface CreatePermissionInput {
+  name: string;
+  description?: string;
+  module?: string;
+  action: string;
+  key?: string;
+}
+
+export interface UpdatePermissionInput {
+  name?: string;
+  description?: string;
+  module?: string;
+  action?: string;
+  key?: string;
+}
+
 export class PermissionService {
   static async listPermissions() {
     let permissions = await prisma.permission.findMany({

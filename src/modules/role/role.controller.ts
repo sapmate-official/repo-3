@@ -1,17 +1,22 @@
 import type { Request, Response, NextFunction } from 'express';
-import { RoleService } from './role.service.js';
+import { RoleService, type CreateRoleInput, type UpdateRoleInput } from './role.service.js';
 import { AppError } from '../../util/errors.js';
 
 const strParam = (val: unknown): string => {
-  if (Array.isArray(val)) return val[0] || '';
-  if (typeof val === 'string' && val !== 'undefined' && val !== 'null') return val;
+  if (Array.isArray(val)) {
+    const first: unknown = val[0];
+    return typeof first === 'string' ? first : '';
+  }
+  if (typeof val === 'string' && val !== 'undefined' && val !== 'null') {
+    return val;
+  }
   return '';
 };
 
 export class RoleController {
   static async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId;
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
@@ -25,7 +30,7 @@ export class RoleController {
 
   static async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || req.user?.orgId || '';
+      const orgId = strParam(req.params.orgId) || strParam(req.query.orgId) || (req.user?.orgId ?? '');
       const id = strParam(req.params.id) || strParam(req.params.roleId);
       if (!id) {
         throw new AppError('Role ID required', 400, 'ROLE_ID_MISSING');
@@ -40,12 +45,13 @@ export class RoleController {
 
   static async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = req.body.orgId || strParam(req.params.orgId) || req.user?.orgId;
+      const body = req.body as CreateRoleInput & { orgId?: string };
+      const orgId = body.orgId ?? (strParam(req.params.orgId) || (req.user?.orgId ?? ''));
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
-      const role = await RoleService.createRole(orgId, req.body);
+      const role = await RoleService.createRole(orgId, body);
       res.status(201).json(role);
     } catch (error) {
       next(error);
@@ -54,13 +60,14 @@ export class RoleController {
 
   static async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId || '';
-      const roleId = strParam(req.params.roleId) || strParam(req.params.id) || req.body.roleId || req.body.id;
+      const body = req.body as UpdateRoleInput & { roleId?: string; id?: string };
+      const orgId = strParam(req.params.orgId) || (req.user?.orgId ?? '');
+      const roleId = strParam(req.params.roleId) || strParam(req.params.id) || (body.roleId ?? body.id ?? '');
       if (!roleId) {
         throw new AppError('Role ID required', 400, 'ROLE_ID_MISSING');
       }
 
-      const updated = await RoleService.updateRole(orgId, roleId, req.body);
+      const updated = await RoleService.updateRole(orgId, roleId, body);
       res.status(200).json(updated);
     } catch (error) {
       next(error);
@@ -69,7 +76,7 @@ export class RoleController {
 
   static async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = strParam(req.params.orgId) || req.user?.orgId || '';
+      const orgId = strParam(req.params.orgId) || (req.user?.orgId ?? '');
       const roleId = strParam(req.params.roleId) || strParam(req.params.id);
       if (!roleId) {
         throw new AppError('Role ID required', 400, 'ROLE_ID_MISSING');
@@ -85,10 +92,11 @@ export class RoleController {
   static async addPermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const roleId = strParam(req.params.roleId) || strParam(req.params.id);
-      const permissions: string[] = Array.isArray(req.body.permissions)
-        ? req.body.permissions
-        : Array.isArray(req.body.permissionIds)
-        ? req.body.permissionIds
+      const body = req.body as { permissions?: string[]; permissionIds?: string[] };
+      const permissions: string[] = Array.isArray(body.permissions)
+        ? body.permissions
+        : Array.isArray(body.permissionIds)
+        ? body.permissionIds
         : [];
 
       const role = await RoleService.addPermissions(roleId, permissions);
@@ -101,10 +109,11 @@ export class RoleController {
   static async removePermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const roleId = strParam(req.params.roleId) || strParam(req.params.id);
-      const permissions: string[] = Array.isArray(req.body.permissions)
-        ? req.body.permissions
-        : Array.isArray(req.body.permissionIds)
-        ? req.body.permissionIds
+      const body = req.body as { permissions?: string[]; permissionIds?: string[] };
+      const permissions: string[] = Array.isArray(body.permissions)
+        ? body.permissions
+        : Array.isArray(body.permissionIds)
+        ? body.permissionIds
         : [];
 
       const role = await RoleService.removePermissions(roleId, permissions);
@@ -114,19 +123,11 @@ export class RoleController {
     }
   }
 
-  static async getHierarchy(_req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      res.status(200).json([]);
-    } catch (error) {
-      next(error);
-    }
+  static getHierarchy(_req: Request, res: Response): void {
+    res.status(200).json([]);
   }
 
-  static async updateHierarchy(_req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      res.status(200).json({ success: true });
-    } catch (error) {
-      next(error);
-    }
+  static updateHierarchy(_req: Request, res: Response): void {
+    res.status(200).json({ success: true });
   }
 }

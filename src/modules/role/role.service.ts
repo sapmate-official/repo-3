@@ -6,14 +6,14 @@ export interface CreateRoleInput {
   description?: string;
   isDefault?: boolean;
   orgId?: string;
-  permissions?: Array<{ permissionId?: string; id?: string } | string>;
+  permissions?: ({ permissionId?: string; id?: string } | string)[];
 }
 
 export interface UpdateRoleInput {
   name?: string;
   description?: string;
   isDefault?: boolean;
-  permissions?: Array<{ permissionId?: string; id?: string } | string>;
+  permissions?: ({ permissionId?: string; id?: string } | string)[];
 }
 
 export class RoleService {
@@ -119,8 +119,8 @@ export class RoleService {
       throw new AppError('A role with this name already exists in the organization', 409, 'ROLE_EXISTS');
     }
 
-    const permissionIds: string[] = (data.permissions || [])
-      .map((p) => (typeof p === 'string' ? p : p.permissionId || p.id || ''))
+    const permissionIds: string[] = (data.permissions ?? [])
+      .map((p) => (typeof p === 'string' ? p : (p.permissionId ?? p.id ?? '')))
       .filter(Boolean);
 
     const role = await prisma.role.create({
@@ -169,18 +169,18 @@ export class RoleService {
     }
 
     return await prisma.$transaction(async (tx) => {
-      const updated = await tx.role.update({
+      await tx.role.update({
         where: { id: roleId },
         data: {
-          name: data.name !== undefined ? data.name : existing.name,
-          description: data.description !== undefined ? data.description : existing.description,
-          isDefault: data.isDefault !== undefined ? data.isDefault : existing.isDefault
+          name: data.name ?? existing.name,
+          description: data.description ?? existing.description,
+          isDefault: data.isDefault ?? existing.isDefault
         }
       });
 
       if (data.permissions !== undefined) {
-        const permissionIds: string[] = (data.permissions || [])
-          .map((p) => (typeof p === 'string' ? p : p.permissionId || p.id || ''))
+        const permissionIds: string[] = (data.permissions ?? [])
+          .map((p) => (typeof p === 'string' ? p : (p.permissionId ?? p.id ?? '')))
           .filter(Boolean);
 
         await tx.rolePermission.deleteMany({ where: { roleId } });

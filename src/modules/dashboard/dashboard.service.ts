@@ -1,11 +1,31 @@
 import { prisma } from '../../db/prisma.js';
 
+export interface AdminStats {
+  totalEmployees: number;
+  activeEmployees: number;
+  presentToday: number;
+  pendingLeaves: number;
+  onboardingPending: number;
+  onboardingApproved: number;
+  attendanceRate: number;
+  departments: { id: string; name: string; _count: { users: number } }[];
+  recentPendingCandidates: unknown[];
+  recentPendingLeaves: unknown[];
+}
+
+export interface ManagerStats {
+  teamSize: number;
+  teamPresentToday: number;
+  teamMembers: unknown[];
+  teamPendingLeaves: unknown[];
+}
+
 export class DashboardService {
   static async getSummary(user: { id: string; orgId: string; isSuperAdmin?: boolean; roles?: string[]; permissions?: string[] }) {
     let orgId = user.orgId;
     if (!orgId && user.isSuperAdmin) {
       const firstOrg = await prisma.organization.findFirst({ select: { id: true } });
-      orgId = firstOrg?.id || '';
+      orgId = firstOrg?.id ?? '';
     }
 
     const now = new Date();
@@ -13,12 +33,11 @@ export class DashboardService {
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     // 1. Determine User Role Profile
-    const isAdmin = Boolean(
-      user.isSuperAdmin ||
-      user.roles?.some((r) => ['SUPER_ADMIN', 'Org_Admin', 'Admin', 'HR_Admin'].includes(r)) ||
-      user.permissions?.includes('*') ||
-      user.permissions?.includes('manage_organization')
-    );
+    const isAdmin =
+      (user.isSuperAdmin ?? false) ||
+      (user.roles?.some((r) => ['SUPER_ADMIN', 'Org_Admin', 'Admin', 'HR_Admin'].includes(r)) ?? false) ||
+      (user.permissions?.includes('*') ?? false) ||
+      (user.permissions?.includes('manage_organization') ?? false);
 
     // Check if manager (has subordinates or heads a department)
     let isManager = false;
@@ -78,8 +97,8 @@ export class DashboardService {
     ]);
 
     // 3. Role-Specific Data Aggregations
-    let adminStats: any = null;
-    let managerStats: any = null;
+    let adminStats: AdminStats | null = null;
+    let managerStats: ManagerStats | null = null;
 
     if (isAdmin && orgId) {
       const [

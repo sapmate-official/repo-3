@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 import { hashPassword } from '../../util/password.js';
+import { EmailService } from '../../services/email.service.js';
 
 export interface CreateCandidateInput {
   email: string;
@@ -291,15 +292,30 @@ export class OnboardingService {
       approvedBy: reviewerId
     };
 
-    return prisma.onboardingCandidate.update({
+    const updated = await prisma.onboardingCandidate.update({
       where: { id: candidate.id },
       data: {
         status: 'APPROVED',
         reviewedById: reviewerId,
         reviewedAt: new Date(),
         formData
+      },
+      include: {
+        organization: true,
+        department: true
       }
     });
+
+    // Dispatch approval email to candidate
+    EmailService.sendCandidateApprovedEmail({
+      email: candidate.personalEmail || candidate.email,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      companyName: candidate.organization.name,
+      jobTitle: approvalData.jobTitle || (formData.jobTitle as string) || null
+    }).catch(() => {});
+
+    return updated;
   }
 
   static async rejectCandidate(orgId: string, id: string, reviewerId: string, reason: string) {
@@ -466,6 +482,16 @@ export class OnboardingService {
     });
 
     const { hashedPassword: _p, ...safeUser } = user;
+
+    // Dispatch official account credentials email to employee
+    EmailService.sendNewEmployeeWelcomeEmail({
+      email: safeUser.email,
+      name: `${safeUser.firstName} ${safeUser.lastName || ''}`.trim(),
+      employeeId,
+      temporaryPassword: tempPassword,
+      companyName: candidate.organization.name
+    }).catch(() => {});
+
     return {
       message: 'Onboarding completed and employee successfully provisioned',
       user: safeUser,

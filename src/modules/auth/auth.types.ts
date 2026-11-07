@@ -1,12 +1,12 @@
 export interface CheckEmailResponse {
   singleOrganization: boolean;
   multipleOrganizations?: boolean;
-  organizations?: Array<{
+  organizations?: {
     orgId: string;
     orgName: string;
     userId: string;
     userStatus: string;
-  }>;
+  }[];
   organization?: {
     orgId: string;
     orgName: string;
@@ -30,6 +30,15 @@ export interface UserSummaryDTO {
   status?: string;
   isSuperAdmin?: boolean;
   superAdmin?: boolean;
+  organization?: {
+    id: string;
+    name: string;
+    isActive?: boolean;
+  };
+  department?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export interface LoginSuccessResponse {

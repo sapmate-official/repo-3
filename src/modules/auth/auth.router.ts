@@ -8,7 +8,7 @@ import {
   setPasswordSchema,
   refreshTokenSchema
 } from './auth.schema.js';
-import { authLimiter, otpLimiter, publicLimiter } from '../../middleware/rateLimit.js';
+import { refreshLimiter, logoutLimiter, authLimiter, otpLimiter, publicLimiter } from '../../middleware/rateLimit.js';
 import { authenticateAny } from '../../middleware/auth.js';
 
 export const authRouter = Router();
@@ -62,6 +62,7 @@ authRouter.get(
 // Token refresh
 authRouter.post(
   '/refresh-token',
+  refreshLimiter,
   validate({ body: refreshTokenSchema }),
   AuthController.refreshToken
 );
@@ -69,6 +70,7 @@ authRouter.post(
 // Logout
 authRouter.post(
   '/logout',
+  logoutLimiter,
   authenticateAny,
   AuthController.logout
 );

@@ -12,10 +12,10 @@ const pool = new Pool({
 
 const adapter = new PrismaPg(pool);
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 export const prisma =
-  globalForPrisma.prisma ||
+  globalForPrisma.prisma ??
   new PrismaClient({
     adapter,
     log: [
@@ -24,15 +24,15 @@ export const prisma =
     ]
   });
 
-prisma.$on('error' as never, (e: any) => {
-  logger.error(e, 'Prisma Client Error');
+prisma.$on('error' as never, (e: unknown) => {
+  logger.error({ err: e }, 'Prisma Client Error');
 });
 
-prisma.$on('warn' as never, (e: any) => {
-  logger.warn(e, 'Prisma Client Warning');
+prisma.$on('warn' as never, (e: unknown) => {
+  logger.warn({ err: e }, 'Prisma Client Warning');
 });
 
-if (process.env.NODE_ENV !== 'production') {
+if (env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 

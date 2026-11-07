@@ -10,6 +10,7 @@ import { roleRouter } from '../modules/role/role.router.js';
 import { permissionRouter } from '../modules/permission/permission.router.js';
 import { rolePermissionRouter } from '../modules/role/rolePermission.router.js';
 import { userRoleRouter } from '../modules/role/userRole.router.js';
+import attendanceRouter from '../modules/attendance/attendance.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -18,6 +19,9 @@ export const v2Router = Router();
 // ==========================================
 // Compatibility Routes for Legacy Frontend (v2)
 // ==========================================
+
+// Attendance module
+v2Router.use('/attendance', attendanceRouter);
 
 // Public endpoints (no auth required)
 v2Router.use('/public', publicRouter);

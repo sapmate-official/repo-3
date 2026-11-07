@@ -34,7 +34,7 @@ export const submitCandidateFormSchema = z.object({
       bankName: z.string().trim().optional()
     })
     .optional(),
-  documents: z.record(z.string(), z.any()).optional()
+  documents: z.record(z.string(), z.unknown()).optional()
 }).passthrough();
 
 export const verifyDocumentSchema = z.object({
@@ -72,3 +72,10 @@ export const candidateIdParamSchema = z.object({
 export const candidateTokenParamSchema = z.object({
   token: z.string().trim().min(1, 'Verification token is required')
 });
+
+export type CreateCandidateInput = z.infer<typeof createCandidateSchema>;
+export type SubmitCandidateFormInput = z.infer<typeof submitCandidateFormSchema>;
+export type VerifyDocumentInput = z.infer<typeof verifyDocumentSchema>;
+export type RejectCandidateInput = z.infer<typeof rejectCandidateSchema>;
+export type ApproveCandidateInput = z.infer<typeof approveCandidateSchema>;
+export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;

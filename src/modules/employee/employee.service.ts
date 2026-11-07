@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 import { hashPassword } from '../../util/password.js';
@@ -58,7 +59,7 @@ export class EmployeeService {
     const limit = Math.min(100, Math.max(1, Number(options.limit) || 20));
     const skip = (page - 1) * limit;
 
-    const where: any = orgId ? { orgId } : {};
+    const where: Prisma.UserWhereInput = orgId ? { orgId } : {};
 
     if (options.status) {
       where.status = options.status;
@@ -93,8 +94,8 @@ export class EmployeeService {
       ];
     }
 
-    const sortField = options.sortBy || 'createdAt';
-    const sortOrder = options.sortOrder || 'desc';
+    const sortField = options.sortBy ?? 'createdAt';
+    const sortOrder = options.sortOrder ?? 'desc';
 
     const [total, users] = await Promise.all([
       prisma.user.count({ where }),
@@ -140,11 +141,12 @@ export class EmployeeService {
 
     const sanitized = users.map((u) => {
       const { hashedPassword: _p, refreshToken: _rt, ...safeUser } = u;
+      const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ');
       return {
         ...safeUser,
-        name: [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email,
-        personalEmail: u.personalEmail || u.email,
-        businessEmail: u.businessEmail || null
+        name: fullName ? fullName : u.email,
+        personalEmail: u.personalEmail ?? u.email,
+        businessEmail: u.businessEmail ?? null
       };
     });
 
@@ -160,7 +162,7 @@ export class EmployeeService {
   }
 
   static async getEmployeeById(orgId: string, identifier: string) {
-    const where: any = {
+    const where: Prisma.UserWhereInput = {
       OR: [{ id: identifier }, { employeeId: identifier }]
     };
     if (orgId) {
@@ -211,11 +213,12 @@ export class EmployeeService {
     }
 
     const { hashedPassword: _p, refreshToken: _rt, ...safeEmployee } = employee;
+    const fullName = [employee.firstName, employee.lastName].filter(Boolean).join(' ');
     return {
       ...safeEmployee,
-      name: [employee.firstName, employee.lastName].filter(Boolean).join(' ') || employee.email,
-      personalEmail: employee.personalEmail || employee.email,
-      businessEmail: employee.businessEmail || null
+      name: fullName ? fullName : employee.email,
+      personalEmail: employee.personalEmail ?? employee.email,
+      businessEmail: employee.businessEmail ?? null
     };
   }
 
@@ -272,8 +275,8 @@ export class EmployeeService {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    const annualPackage = input.annualPackage || (input.monthlySalary ? input.monthlySalary * 12 : 0);
-    const monthlySalary = input.monthlySalary || (input.annualPackage ? Math.round(input.annualPackage / 12) : 0);
+    const annualPackage = input.annualPackage ?? (input.monthlySalary ? input.monthlySalary * 12 : 0);
+    const monthlySalary = input.monthlySalary ?? (input.annualPackage ? Math.round(input.annualPackage / 12) : 0);
 
     // 5. Atomic transaction
     const newEmployee = await prisma.$transaction(async (tx) => {
@@ -281,21 +284,21 @@ export class EmployeeService {
         data: {
           orgId,
           firstName: input.firstName,
-          lastName: input.lastName || '',
-          email: input.businessEmail || input.email,
-          personalEmail: input.personalEmail || input.email,
-          businessEmail: input.businessEmail || null,
-          jobTitle: input.jobTitle || null,
-          mobileNumber: input.mobileNumber || null,
-          emergencyContact: input.emergencyContact || null,
+          lastName: input.lastName ?? '',
+          email: input.businessEmail ?? input.email,
+          personalEmail: input.personalEmail ?? input.email,
+          businessEmail: input.businessEmail ?? null,
+          jobTitle: input.jobTitle ?? null,
+          mobileNumber: input.mobileNumber ?? null,
+          emergencyContact: input.emergencyContact ?? null,
           dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : null,
           hiredDate: input.hiredDate ? new Date(input.hiredDate) : new Date(),
-          address: input.address || null,
-          adharNumber: input.adharNumber || null,
-          panNumber: input.panNumber || null,
+          address: input.address ?? null,
+          adharNumber: input.adharNumber ?? null,
+          panNumber: input.panNumber ?? null,
           employeeId: input.employeeId,
-          departmentId: input.departmentId || null,
-          managerId: input.managerId || null,
+          departmentId: input.departmentId ?? null,
+          managerId: input.managerId ?? null,
           hashedPassword,
           verificationToken,
           verificationTokenExpiry,
@@ -311,10 +314,10 @@ export class EmployeeService {
             ? {
                 bankDetails: {
                   create: {
-                    accountHolder: input.accountHolder || `${input.firstName} ${input.lastName || ''}`.trim(),
+                    accountHolder: input.accountHolder ?? `${input.firstName} ${input.lastName ?? ''}`.trim(),
                     accountNumber: input.accountNumber,
                     ifscCode: input.ifscCode,
-                    bankName: input.bankName || 'Unknown Bank'
+                    bankName: input.bankName ?? 'Unknown Bank'
                   }
                 }
               }
@@ -428,14 +431,15 @@ export class EmployeeService {
 
       // Upsert bank details if bank info given
       if (input.accountNumber && input.ifscCode) {
+        const defaultHolder = `${input.firstName ?? existing.firstName} ${input.lastName ?? existing.lastName}`.trim();
         await tx.bankDetails.upsert({
           where: { userId },
           create: {
             userId,
-            accountHolder: input.accountHolder || `${input.firstName || existing.firstName} ${input.lastName || existing.lastName}`.trim(),
+            accountHolder: input.accountHolder ?? (defaultHolder || 'Account Holder'),
             accountNumber: input.accountNumber,
             ifscCode: input.ifscCode,
-            bankName: input.bankName || 'Unknown Bank'
+            bankName: input.bankName ?? 'Unknown Bank'
           },
           update: {
             ...(input.accountHolder ? { accountHolder: input.accountHolder } : {}),
@@ -568,20 +572,23 @@ export class EmployeeService {
 
     return users.map((u) => {
       const { hashedPassword: _p, refreshToken: _rt, ...safeUser } = u;
+      const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ');
       return {
         ...safeUser,
-        name: [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email,
-        personalEmail: u.personalEmail || u.email,
-        businessEmail: u.businessEmail || null
+        name: fullName ? fullName : u.email,
+        personalEmail: u.personalEmail ?? u.email,
+        businessEmail: u.businessEmail ?? null
       };
     });
   }
 
   static async getEmployeePermissions(orgId: string, id: string) {
-    const employee = (await this.getEmployeeById(orgId, id)) as any;
-    const permissions = new Map<string, any>();
+    const employee = await this.getEmployeeById(orgId, id);
+    const permissions = new Map<string, unknown>();
 
-    for (const userRole of employee.roles ?? []) {
+    const roles = Array.isArray(employee.roles) ? employee.roles : [];
+    for (const item of roles) {
+      const userRole = item as { role?: { permissions?: { permission?: { id?: string } }[] } };
       for (const rolePermission of userRole.role?.permissions ?? []) {
         if (rolePermission.permission?.id) {
           permissions.set(rolePermission.permission.id, rolePermission.permission);

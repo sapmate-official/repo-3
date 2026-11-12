@@ -31,6 +31,7 @@ vi.mock('../../src/db/prisma.js', () => ({
 
 import prisma from '../../src/db/prisma.js';
 import { EmployeeService } from '../../src/modules/employee/employee.service.js';
+import { EmailService } from '../../src/services/email.service.js';
 
 const employee = {
   id: 'user-1',
@@ -65,6 +66,49 @@ describe('EmployeeService', () => {
         roleIds: ['role-a', 'role-from-org-b']
       })
     ).rejects.toMatchObject({ code: 'INVALID_ROLE' });
+  });
+
+  it('creates employee and dispatches welcome email with credentials', async () => {
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.role.findMany).mockResolvedValue([{ id: 'role-a' }] as never);
+
+    const emailSpy = vi.spyOn(EmailService, 'sendNewEmployeeWelcomeEmail').mockResolvedValue(undefined);
+
+    const createdUser = {
+      ...employee,
+      organization: { name: 'Acme Corp' }
+    };
+
+    const tx = {
+      user: { create: vi.fn().mockResolvedValue(createdUser) },
+      leaveType: { findMany: vi.fn().mockResolvedValue([]) },
+      leaveBalance: { createMany: vi.fn().mockResolvedValue({ count: 0 }) }
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => {
+      if (typeof callback === 'function') {
+        return await (callback as (client: unknown) => Promise<unknown>)(tx);
+      }
+      return callback;
+    });
+
+    const result = await EmployeeService.createEmployee('org-a', {
+      firstName: 'Ada',
+      email: 'ada@example.test',
+      employeeId: 'EMP001',
+      roleIds: ['role-a']
+    });
+
+    expect(result.employeeId).toBe('EMP001');
+    expect(result.temporaryPassword).toBeDefined();
+    expect(emailSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'ada@example.test',
+        name: 'Ada Lovelace',
+        employeeId: 'EMP001',
+        companyName: 'Acme Corp'
+      })
+    );
   });
 
   it('rejects employee updates when any requested role is outside the organization', async () => {

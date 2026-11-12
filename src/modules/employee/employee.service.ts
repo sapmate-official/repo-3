@@ -3,6 +3,8 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 import { hashPassword } from '../../util/password.js';
+import { EmailService } from '../../services/email.service.js';
+import { logger } from '../../config/logger.js';
 
 export interface ListEmployeesOptions {
   page?: number;
@@ -352,7 +354,8 @@ export class EmployeeService {
           department: true,
           roles: { include: { role: true } },
           bankDetails: true,
-          salaryParameter: true
+          salaryParameter: true,
+          organization: { select: { name: true } }
         }
       });
 
@@ -377,6 +380,17 @@ export class EmployeeService {
     });
 
     const { hashedPassword: _p, ...safe } = newEmployee;
+
+    void EmailService.sendNewEmployeeWelcomeEmail({
+      email: safe.email,
+      name: `${safe.firstName} ${safe.lastName ?? ''}`.trim(),
+      employeeId: safe.employeeId ?? input.employeeId,
+      temporaryPassword: tempPassword,
+      companyName: newEmployee.organization?.name ?? 'Your Organization'
+    }).catch((err: unknown) => {
+      logger.error({ err }, 'Failed to dispatch new employee welcome email');
+    });
+
     return {
       ...safe,
       temporaryPassword: tempPassword,

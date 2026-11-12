@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+const dateStringSchema = z
+  .string()
+  .datetime()
+  .or(z.string().regex(/^\d{4}-\d{2}-\d{2}/));
+
 export const listEmployeesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -22,8 +27,8 @@ export const createEmployeeSchema = z.object({
   jobTitle: z.string().trim().max(100).optional().nullable(),
   mobileNumber: z.string().trim().max(20).optional().nullable(),
   emergencyContact: z.string().trim().max(50).optional().nullable(),
-  dateOfBirth: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}/)).optional().nullable(),
-  hiredDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}/)).optional().nullable(),
+  dateOfBirth: dateStringSchema.optional().nullable(),
+  hiredDate: dateStringSchema.optional().nullable(),
   address: z.string().trim().max(500).optional().nullable(),
   adharNumber: z.string().trim().max(30).optional().nullable(),
   panNumber: z.string().trim().max(30).optional().nullable(),
@@ -48,9 +53,39 @@ export const createEmployeeSchema = z.object({
   insuranceFixed: z.coerce.number().nonnegative().optional().default(1000)
 });
 
-export const updateEmployeeSchema = createEmployeeSchema.partial().extend({
+export const updateEmployeeSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required').max(100).optional(),
+  lastName: z.string().trim().max(100).optional(),
+  email: z.string().trim().email('Valid email is required').optional(),
+  personalEmail: z.string().trim().email().optional().nullable(),
+  businessEmail: z.string().trim().email().optional().nullable(),
+  jobTitle: z.string().trim().max(100).optional().nullable(),
+  mobileNumber: z.string().trim().max(20).optional().nullable(),
+  emergencyContact: z.string().trim().max(50).optional().nullable(),
+  dateOfBirth: dateStringSchema.optional().nullable(),
+  hiredDate: dateStringSchema.optional().nullable(),
+  address: z.string().trim().max(500).optional().nullable(),
+  adharNumber: z.string().trim().max(30).optional().nullable(),
+  panNumber: z.string().trim().max(30).optional().nullable(),
+  employeeId: z.string().trim().min(1, 'Employee ID is required').optional(),
+  departmentId: z.string().trim().optional().nullable(),
+  managerId: z.string().trim().optional().nullable(),
+  roleIds: z.array(z.string().trim()).min(1, 'At least one role ID is required').optional(),
+  orgId: z.string().trim().optional(),
+  accountHolder: z.string().trim().max(150).optional().nullable(),
+  accountNumber: z.string().trim().max(50).optional().nullable(),
+  ifscCode: z.string().trim().max(20).optional().nullable(),
+  bankName: z.string().trim().max(100).optional().nullable(),
+  annualPackage: z.coerce.number().nonnegative().optional().nullable(),
+  monthlySalary: z.coerce.number().nonnegative().optional().nullable(),
+  hraPercentage: z.coerce.number().min(0).max(100).optional(),
+  daPercentage: z.coerce.number().min(0).max(100).optional(),
+  taPercentage: z.coerce.number().min(0).max(100).optional(),
+  pfPercentage: z.coerce.number().min(0).max(100).optional(),
+  taxPercentage: z.coerce.number().min(0).max(100).optional(),
+  insuranceFixed: z.coerce.number().nonnegative().optional(),
   status: z.enum(['active', 'inactive']).optional(),
-  terminationDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}/)).optional().nullable()
+  terminationDate: dateStringSchema.optional().nullable()
 });
 
 export const employeeIdParamSchema = z.object({

@@ -77,6 +77,37 @@ describe('route authorization', () => {
     expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
   });
 
+  it('requires create_new_department for department creation', async () => {
+    vi.mocked(prismaMock.user.findUnique).mockResolvedValue(
+      activeUser('hr-user', 'org-a', [
+        { name: 'HR Manager', permissions: ['edit_department'] }
+      ])
+    );
+
+    const res = await request(app)
+      .post('/api/v1/department')
+      .set('Authorization', authHeader({ id: 'hr-user', orgId: 'org-a' }))
+      .send({ name: 'Engineering' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
+  });
+
+  it('requires delete_department for department deletion', async () => {
+    vi.mocked(prismaMock.user.findUnique).mockResolvedValue(
+      activeUser('hr-user', 'org-a', [
+        { name: 'HR Manager', permissions: ['edit_department'] }
+      ])
+    );
+
+    const res = await request(app)
+      .delete('/api/v1/department/dept-1')
+      .set('Authorization', authHeader({ id: 'hr-user', orgId: 'org-a' }));
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
+  });
+
   it('rejects onboarding management without employee management permission', async () => {
     vi.mocked(prismaMock.user.findUnique).mockResolvedValue(
       activeUser('employee-user', 'org-a', [

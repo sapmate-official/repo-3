@@ -12,9 +12,10 @@ const invoke = (
     | ReturnType<typeof requireRole>
     | ReturnType<typeof requireSelfOrPermission>,
   user?: unknown,
-  params: Record<string, string> = {}
+  params: Record<string, string> = {},
+  query: Record<string, string> = {}
 ) => {
-  const req = { user, params } as unknown as Request;
+  const req = { user, params, query } as unknown as Request;
   const json = vi.fn();
   const res = {
     status: vi.fn().mockReturnThis(),
@@ -84,6 +85,26 @@ describe('requireSelfOrPermission', () => {
       roles: ['Employee'],
       permissions: []
     }, { id: 'user-1' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows a user to access their own resource by employee id', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      employeeId: 'EMP001',
+      roles: ['Employee'],
+      permissions: []
+    }, { id: 'EMP001' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows a user to access their own resource through the query string', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      employeeId: 'EMP001',
+      roles: ['Employee'],
+      permissions: []
+    }, {}, { id: 'user-1' });
     expect(next).toHaveBeenCalledOnce();
   });
 

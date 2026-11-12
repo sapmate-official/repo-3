@@ -30,13 +30,23 @@ export class PermissionService {
         { name: 'Mark Attendance', description: 'Clock in and clock out for daily work session', module: 'Attendance', action: 'create', key: 'mark_attendance' },
         { name: 'Leave Request', description: 'Submit leave applications to manager', module: 'Leave', action: 'create', key: 'leave_request' },
         { name: 'View Salary Slip', description: 'View and download own monthly payslips', module: 'Payroll', action: 'read', key: 'view_salary_slip_to_myself' },
-        { name: 'View Subordinates', description: 'View team members reporting directly', module: 'Manager', action: 'read', key: 'view_subordinates' },
+        { name: 'View Subordinates', description: 'View team members reporting directly', module: 'user', action: 'view_subordinates', key: 'view_personal_info_of_subordinates' },
         { name: 'Approve Leave', description: 'Approve or reject leave requests from direct reports', module: 'Leave', action: 'update', key: 'approve_leave' },
-        { name: 'Manage Team', description: 'Assign tasks and coordinate department members', module: 'Manager', action: 'update', key: 'manage_team' },
-        { name: 'Create User', description: 'Create and register new employees', module: 'Employee', action: 'create', key: 'user_create' },
-        { name: 'Read User', description: 'Read details of organization staff', module: 'Employee', action: 'read', key: 'user_read' },
-        { name: 'Manage Departments', description: 'Create and modify department structure', module: 'Department', action: 'manage', key: 'department_create' },
-        { name: 'Manage Roles', description: 'Configure organization roles and assign access', module: 'Role', action: 'manage', key: 'role_manage' }
+        { name: 'Create User', description: 'Create and register new employees', module: 'user', action: 'create', key: 'create_user' },
+        { name: 'View Employee Management', description: 'Read details of organization staff', module: 'user', action: 'view', key: 'view_employee_management' },
+        { name: 'Create Department', description: 'Create new departments', module: 'Department', action: 'create', key: 'create_new_department' },
+        { name: 'Edit Department', description: 'Edit department details', module: 'Department', action: 'edit', key: 'edit_department' },
+        { name: 'Delete Department', description: 'Delete departments', module: 'Department', action: 'delete', key: 'delete_department' },
+        { name: 'Change Department Head', description: 'Assign or change a department head', module: 'Department', action: 'edit', key: 'change_department_head' },
+        { name: 'Update Own Personal Info', description: 'Update own personal details', module: 'user', action: 'update', key: 'update_personal_info' },
+        { name: 'Update Own Employee Info', description: 'Update own employment details', module: 'user', action: 'update', key: 'update_employee_own' },
+        { name: 'Update Own Salary Info', description: 'Update own salary details', module: 'user', action: 'update', key: 'update_salary_own' },
+        { name: 'Update All User Personal Info', description: 'Update personal details for all users', module: 'user', action: 'update', key: 'update_personal_info_all_user' },
+        { name: 'Update Subordinate Personal Info', description: 'Update personal details for subordinates', module: 'user', action: 'update', key: 'update_personal_info_subordinates' },
+        { name: 'Update All User Employee Info', description: 'Update employment details for all users', module: 'user', action: 'update', key: 'update_employee_info_all_user' },
+        { name: 'Update All User Salary Info', description: 'Update salary details for all users', module: 'user', action: 'update', key: 'update_salary_all_user' },
+        { name: 'Update Subordinate Salary Info', description: 'Update salary details for subordinates', module: 'user', action: 'update', key: 'update_salary_subordinates' },
+        { name: 'Manage Roles', description: 'Configure organization roles and assign access', module: 'user', action: 'manage_roles', key: 'manage_role' }
       ];
 
       for (const p of standardPerms) {

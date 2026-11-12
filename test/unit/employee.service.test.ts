@@ -78,6 +78,24 @@ describe('EmployeeService', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ROLE' });
   });
 
+  it('resolves the organization for a super-admin employee lookup', async () => {
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({ orgId: 'org-a' } as never);
+
+    await expect(EmployeeService.getEmployeeOrgId('EMP001')).resolves.toBe('org-a');
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [{ id: 'EMP001' }, { employeeId: 'EMP001' }]
+      },
+      select: { orgId: true }
+    });
+  });
+
+  it('returns null when no employee matches a super-admin lookup', async () => {
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+
+    await expect(EmployeeService.getEmployeeOrgId('missing')).resolves.toBeNull();
+  });
+
   it('deactivates employees instead of hard deleting historical records', async () => {
     vi.mocked(prisma.user.findFirst).mockResolvedValue(employee as never);
 

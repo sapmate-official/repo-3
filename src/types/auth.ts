@@ -1,6 +1,7 @@
 export interface AuthenticatedUser {
   id: string;
   email: string;
+  employeeId?: string;
   orgId?: string;
   firstName?: string | null;
   lastName?: string | null;

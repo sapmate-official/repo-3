@@ -59,7 +59,10 @@ export const requireSelfOrPermission = (
       return;
     }
 
-    const isSelf = req.params[paramName] === req.user.id;
+    const requestedId = req.params[paramName] ?? req.query[paramName];
+    const isSelf =
+      requestedId === req.user.id ||
+      (!!req.user.employeeId && requestedId === req.user.employeeId);
     const hasAllowedRole = req.user.roles.some(r => allowedRoles.includes(r));
     const hasPermission = req.user.permissions.includes(permissionKey);
 

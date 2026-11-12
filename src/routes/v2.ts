@@ -144,14 +144,14 @@ v2Router.put(
   '/user/:id',
   authenticateAny,
   requireOrgScope(),
-  requirePermission(PERMISSION_KEYS.userWrite),
+  requireSelfOrPermission(PERMISSION_KEYS.userWrite),
   EmployeeController.update
 );
 v2Router.patch(
   '/user/:id',
   authenticateAny,
   requireOrgScope(),
-  requirePermission(PERMISSION_KEYS.userWrite),
+  requireSelfOrPermission(PERMISSION_KEYS.userWrite),
   EmployeeController.update
 );
 v2Router.delete(

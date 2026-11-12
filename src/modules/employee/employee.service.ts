@@ -161,6 +161,16 @@ export class EmployeeService {
     };
   }
 
+  static async getEmployeeOrgId(identifier: string): Promise<string | null> {
+    const employee = await prisma.user.findFirst({
+      where: {
+        OR: [{ id: identifier }, { employeeId: identifier }]
+      },
+      select: { orgId: true }
+    });
+    return employee?.orgId ?? null;
+  }
+
   static async getEmployeeById(orgId: string, identifier: string) {
     const where: Prisma.UserWhereInput = {
       OR: [{ id: identifier }, { employeeId: identifier }]

@@ -31,11 +31,11 @@ employeeRouter.get('/:id', validate({ params: employeeIdParamSchema }), requireO
 // Create employee
 employeeRouter.post('/', validate({ body: createEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.create);
 
-// Update employee (supports /:id and query /?id=...)
-employeeRouter.put('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
-employeeRouter.put('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
-employeeRouter.patch('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
-employeeRouter.patch('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+// Update employee (self-service or users with write permission)
+employeeRouter.put('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), requireSelfOrPermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+employeeRouter.put('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), requireSelfOrPermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+employeeRouter.patch('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), requireSelfOrPermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+employeeRouter.patch('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), requireSelfOrPermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
 
 // Delete employee
 employeeRouter.delete('/:id', validate({ params: employeeIdParamSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.delete);

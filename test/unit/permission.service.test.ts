@@ -46,8 +46,37 @@ describe('PermissionService', () => {
         PERMISSION_KEYS.personalSelfUpdate,
         PERMISSION_KEYS.employeeSelfUpdate,
         PERMISSION_KEYS.salarySelfUpdate,
-        PERMISSION_KEYS.personalAllUpdate
+        PERMISSION_KEYS.personalAllUpdate,
+        PERMISSION_KEYS.leaveTypeRead,
+        PERMISSION_KEYS.leaveTypeCreate,
+        PERMISSION_KEYS.leaveTypeUpdate,
+        PERMISSION_KEYS.leaveTypeDelete,
+        PERMISSION_KEYS.leaveRequestCreate,
+        PERMISSION_KEYS.leaveApprove,
+        PERMISSION_KEYS.leaveReject,
+        PERMISSION_KEYS.leaveSubordinatesView,
+        PERMISSION_KEYS.leaveAllView,
+        PERMISSION_KEYS.leaveBalanceView,
+        PERMISSION_KEYS.leaveBalanceManage
       ])
     );
+  });
+
+  it('adds missing leave permissions without duplicating existing keys', async () => {
+    vi.mocked(prisma.permission.findMany)
+      .mockResolvedValueOnce([
+        { key: PERMISSION_KEYS.userRead }
+      ] as never)
+      .mockResolvedValueOnce([] as never);
+
+    await PermissionService.listPermissions();
+
+    const seededKeys = vi.mocked(prisma.permission.create).mock.calls.map(
+      ([args]) => args.data.key
+    );
+
+    expect(seededKeys).toContain(PERMISSION_KEYS.leaveTypeRead);
+    expect(seededKeys).toContain(PERMISSION_KEYS.leaveBalanceManage);
+    expect(seededKeys).not.toContain(PERMISSION_KEYS.userRead);
   });
 });

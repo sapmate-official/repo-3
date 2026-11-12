@@ -240,7 +240,116 @@ export class EmailService {
     });
   }
 
-  // 4. New Provisioned Employee Welcome Email
+  // 4. Leave Request Submitted Notification
+  static async sendLeaveRequestEmail(params: {
+    recipients: string[];
+    employeeName: string;
+    employeeEmail: string;
+    leaveType: string;
+    startDate: Date;
+    endDate: Date;
+    duration: number;
+    reason?: string | null;
+    companyName: string;
+  }): Promise<void> {
+    const recipients = Array.from(
+      new Set(params.recipients.map((email) => email.trim()).filter(Boolean))
+    );
+    if (recipients.length === 0) {
+      return;
+    }
+
+    const employeeName = escapeHtml(params.employeeName || params.employeeEmail);
+    const employeeEmail = escapeHtml(params.employeeEmail);
+    const leaveType = escapeHtml(params.leaveType);
+    const companyName = escapeHtml(params.companyName);
+    const startDate = params.startDate.toISOString().slice(0, 10);
+    const endDate = params.endDate.toISOString().slice(0, 10);
+    const reason = params.reason ? escapeHtml(params.reason) : 'Not provided';
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
+          <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 30px 20px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">New Leave Request</h1>
+          </div>
+          <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
+            <p><strong>${employeeName}</strong> (${employeeEmail}) has submitted a leave request for <strong>${companyName}</strong>.</p>
+            <div style="background-color: #f3f4f6; padding: 15px 20px; border-radius: 6px; margin: 25px 0;">
+              <p style="margin: 6px 0;"><strong>Leave type:</strong> ${leaveType}</p>
+              <p style="margin: 6px 0;"><strong>Dates:</strong> ${startDate} to ${endDate}</p>
+              <p style="margin: 6px 0;"><strong>Duration:</strong> ${params.duration} day(s)</p>
+              <p style="margin: 6px 0;"><strong>Reason:</strong> ${reason}</p>
+            </div>
+            <p>Please review the request in the Alkaa HRMS leave management dashboard.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: recipients.map((email) => ({ email })),
+      subject: sanitizeHeaderValue(`Leave request from ${params.employeeName || params.employeeEmail}`),
+      htmlContent
+    });
+  }
+
+  // 5. Leave Request Status Update
+  static async sendLeaveStatusUpdateEmail(params: {
+    email: string;
+    name: string;
+    leaveType: string;
+    startDate: Date;
+    endDate: Date;
+    duration: number;
+    status: string;
+    rejectedReason?: string | null;
+    companyName: string;
+  }): Promise<void> {
+    const safeName = escapeHtml(params.name || params.email);
+    const safeLeaveType = escapeHtml(params.leaveType);
+    const safeCompanyName = escapeHtml(params.companyName);
+    const safeStatus = escapeHtml(params.status);
+    const startDate = params.startDate.toISOString().slice(0, 10);
+    const endDate = params.endDate.toISOString().slice(0, 10);
+    const accentColor = params.status === 'APPROVED'
+      ? '#059669'
+      : params.status === 'REJECTED'
+        ? '#dc2626'
+        : '#6b7280';
+    const reasonBlock = params.rejectedReason
+      ? `<p style="margin: 6px 0;"><strong>Rejection reason:</strong> ${escapeHtml(params.rejectedReason)}</p>`
+      : '';
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
+          <div style="background: ${accentColor}; padding: 30px 20px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Leave Request ${safeStatus}</h1>
+          </div>
+          <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
+            <p>Hi <strong>${safeName}</strong>,</p>
+            <p>Your leave request for <strong>${safeCompanyName}</strong> has been <strong>${safeStatus.toLowerCase()}</strong>.</p>
+            <div style="background-color: #f3f4f6; padding: 15px 20px; border-radius: 6px; margin: 25px 0;">
+              <p style="margin: 6px 0;"><strong>Leave type:</strong> ${safeLeaveType}</p>
+              <p style="margin: 6px 0;"><strong>Dates:</strong> ${startDate} to ${endDate}</p>
+              <p style="margin: 6px 0;"><strong>Duration:</strong> ${params.duration} day(s)</p>
+              ${reasonBlock}
+            </div>
+            <p>You can review the request in the Alkaa HRMS leave management dashboard.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: [{ email: params.email, name: params.name }],
+      subject: sanitizeHeaderValue(`Leave request ${params.status.toLowerCase()} - ${params.leaveType}`),
+      htmlContent
+    });
+  }
+
+  // 6. New Provisioned Employee Welcome Email
   static async sendNewEmployeeWelcomeEmail(params: {
     email: string;
     name: string;

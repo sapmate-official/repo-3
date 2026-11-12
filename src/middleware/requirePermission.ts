@@ -40,6 +40,43 @@ export const requirePermission = (
   };
 };
 
+export const requireAnyPermission = (
+  permissionKeys: string[],
+  allowedRoles: string[] = ['Org_Admin']
+) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({
+        error: 'Authentication required.',
+        code: 'UNAUTHENTICATED'
+      });
+      return;
+    }
+
+    if (req.user.isSuperAdmin) {
+      next();
+      return;
+    }
+
+    const hasAllowedRole = req.user.roles.some(r => allowedRoles.includes(r));
+    if (hasAllowedRole) {
+      next();
+      return;
+    }
+
+    const hasPermission = permissionKeys.some(key => req.user?.permissions.includes(key));
+    if (!hasPermission) {
+      res.status(403).json({
+        error: `Access denied. Missing one of required permissions: ${permissionKeys.join(', ')}`,
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+      return;
+    }
+
+    next();
+  };
+};
+
 export const requireSelfOrPermission = (
   permissionKey: string,
   paramName = 'id',

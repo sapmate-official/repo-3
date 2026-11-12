@@ -14,6 +14,11 @@ import { permissionRouter } from '../modules/permission/permission.router.js';
 import { rolePermissionRouter } from '../modules/role/rolePermission.router.js';
 import { userRoleRouter } from '../modules/role/userRole.router.js';
 import attendanceRouter from '../modules/attendance/attendance.router.js';
+import {
+  leaveBalanceRouter,
+  leaveRequestRouter,
+  leaveTypeRouter
+} from '../modules/leave/leave.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -25,6 +30,14 @@ export const v2Router = Router();
 
 // Attendance module
 v2Router.use('/attendance', attendanceRouter);
+
+// Leave modules
+v2Router.use('/leave-type', leaveTypeRouter);
+v2Router.use('/leave-types', leaveTypeRouter);
+v2Router.use('/leave-request', leaveRequestRouter);
+v2Router.use('/leave-requests', leaveRequestRouter);
+v2Router.use('/leave-balance', leaveBalanceRouter);
+v2Router.use('/leave-balances', leaveBalanceRouter);
 
 // Public endpoints (no auth required)
 v2Router.use('/public', publicRouter);

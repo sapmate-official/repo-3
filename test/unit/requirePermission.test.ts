@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
 import {
+  requireAnyPermission,
   requirePermission,
   requireRole,
   requireSelfOrPermission
@@ -8,6 +9,7 @@ import {
 
 const invoke = (
   middleware:
+    | ReturnType<typeof requireAnyPermission>
     | ReturnType<typeof requirePermission>
     | ReturnType<typeof requireRole>
     | ReturnType<typeof requireSelfOrPermission>,
@@ -75,6 +77,39 @@ describe('requirePermission', () => {
       permissions: []
     });
     expect(next).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requireAnyPermission', () => {
+  it('allows a user with any one of the accepted permissions', () => {
+    const { next } = invoke(requireAnyPermission(['leave_request', 'approve_leave']), {
+      roles: ['Employee'],
+      permissions: ['leave_request']
+    });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows the default Org_Admin role', () => {
+    const { next } = invoke(requireAnyPermission(['leave_request']), {
+      roles: ['Org_Admin'],
+      permissions: []
+    });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a user with none of the accepted permissions', () => {
+    const { next, status } = invoke(requireAnyPermission(['leave_request', 'approve_leave']), {
+      roles: ['Employee'],
+      permissions: ['view_personal_info_to_myself']
+    });
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated requests', () => {
+    const { next, status } = invoke(requireAnyPermission(['leave_request']));
+    expect(status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { DepartmentController } from './department.controller.js';
 import { authenticateAny } from '../../middleware/auth.js';
 import { requireOrgScope } from '../../middleware/requireOrgScope.js';
+import { requirePermission } from '../../middleware/requirePermission.js';
+import { PERMISSION_KEYS } from '../auth/permissionKeys.js';
 import { validate } from '../../middleware/validate.js';
 import {
   createDepartmentSchema,
@@ -27,17 +29,17 @@ departmentRouter.get('/:id/employees', validate({ params: departmentIdParamSchem
 departmentRouter.get('/:id', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.getById);
 
 // Assign / change department head
-departmentRouter.put('/:id/head/:userId', validate({ params: departmentHeadParamSchema }), requireOrgScope(), DepartmentController.setHead);
-departmentRouter.patch('/:id/head/:userId', validate({ params: departmentHeadParamSchema }), requireOrgScope(), DepartmentController.setHead);
+departmentRouter.put('/:id/head/:userId', validate({ params: departmentHeadParamSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.departmentHead), DepartmentController.setHead);
+departmentRouter.patch('/:id/head/:userId', validate({ params: departmentHeadParamSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.departmentHead), DepartmentController.setHead);
 
 // Create department
-departmentRouter.post('/', validate({ body: createDepartmentSchema }), requireOrgScope(), DepartmentController.create);
+departmentRouter.post('/', validate({ body: createDepartmentSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.departmentCreate), DepartmentController.create);
 
 // Update department
-departmentRouter.put('/:id', validate({ params: departmentIdParamSchema, body: updateDepartmentSchema }), requireOrgScope(), DepartmentController.update);
-departmentRouter.patch('/:id', validate({ params: departmentIdParamSchema, body: updateDepartmentSchema }), requireOrgScope(), DepartmentController.update);
+departmentRouter.put('/:id', validate({ params: departmentIdParamSchema, body: updateDepartmentSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.departmentUpdate), DepartmentController.update);
+departmentRouter.patch('/:id', validate({ params: departmentIdParamSchema, body: updateDepartmentSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.departmentUpdate), DepartmentController.update);
 
 // Delete department
-departmentRouter.delete('/:id', validate({ params: departmentIdParamSchema }), requireOrgScope(), DepartmentController.delete);
+departmentRouter.delete('/:id', validate({ params: departmentIdParamSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.departmentDelete), DepartmentController.delete);
 
 export default departmentRouter;

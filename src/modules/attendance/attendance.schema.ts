@@ -1,16 +1,36 @@
 import { z } from 'zod';
 
-export const locationSchema = z.object({
+const locationObjectSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   address: z.string().optional(),
   accuracy: z.number().optional()
 }).passthrough();
 
+const coordinateStringSchema = z.string().trim().refine((value) => {
+  if (!value) {
+    return true;
+  }
+  const parts = value.split(',');
+  if (parts.length !== 2) {
+    return false;
+  }
+  const [latitude, longitude] = parts.map((part) => part.trim());
+  return latitude !== '' && longitude !== '' && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+}, 'Location must be an object or "latitude,longitude"').transform((value) => {
+  if (!value) {
+    return {};
+  }
+  const [latitude, longitude] = value.split(',').map((part) => Number(part.trim()));
+  return { latitude, longitude };
+});
+
+export const locationSchema = z.union([locationObjectSchema, coordinateStringSchema]);
+
 export const checkInSchema = z.object({
   date: z.string().min(1, 'Date is required'),
   checkInTime: z.string().min(1, 'Check-in time is required'),
-  checkInLocation: locationSchema.or(z.record(z.string(), z.unknown())),
+  checkInLocation: locationSchema,
   notes: z.string().trim().max(1000).optional().nullable(),
   clientTimestamp: z.string().optional(),
   clientTimezone: z.string().optional()
@@ -20,7 +40,7 @@ export const checkOutSchema = z.object({
   checkInId: z.string().optional(),
   date: z.string().min(1, 'Date is required'),
   checkOutTime: z.string().min(1, 'Check-out time is required'),
-  checkOutLocation: locationSchema.or(z.record(z.string(), z.unknown())),
+  checkOutLocation: locationSchema,
   notes: z.string().trim().max(1000).optional().nullable(),
   reportContent: z.unknown().optional(),
   clientTimestamp: z.string().optional(),
@@ -39,10 +59,12 @@ export const pastAttendanceSchema = z.object({
   date: z.string().min(1, 'Date is required'),
   checkInTime: z.string().min(1, 'Check-in time is required'),
   checkOutTime: z.string().min(1, 'Check-out time is required'),
-  checkInLocation: locationSchema.or(z.record(z.string(), z.unknown())).optional().default({}),
-  checkOutLocation: locationSchema.or(z.record(z.string(), z.unknown())).optional().default({}),
+  checkInLocation: locationSchema.optional().default({}),
+  checkOutLocation: locationSchema.optional().default({}),
   notes: z.string().trim().max(1000).optional().nullable(),
-  reason: z.string().trim().max(1000).optional().nullable()
+  reason: z.string().trim().max(1000).optional().nullable(),
+  clientTimestamp: z.string().optional(),
+  clientTimezone: z.string().optional()
 });
 
 export const verifyAttendanceSchema = z.object({

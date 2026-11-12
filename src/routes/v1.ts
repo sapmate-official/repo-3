@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { authenticateAny } from '../middleware/auth.js';
+import { requireOrgScope } from '../middleware/requireOrgScope.js';
+import { requirePermission } from '../middleware/requirePermission.js';
+import { PERMISSION_KEYS } from '../modules/auth/permissionKeys.js';
 import { authRouter } from '../modules/auth/auth.router.js';
 import { organizationRouter } from '../modules/organization/organization.router.js';
 import { departmentRouter } from '../modules/department/department.router.js';
@@ -46,7 +49,19 @@ v1Router.use('/permission', permissionRouter);
 v1Router.use('/permissions', permissionRouter);
 
 // Legacy v1 helper endpoints for frontend backward compatibility
-v1Router.get('/manager/employee-list', authenticateAny, EmployeeController.listLegacy);
-v1Router.post('/employee/register', authenticateAny, EmployeeController.create);
+v1Router.get(
+  '/manager/employee-list',
+  authenticateAny,
+  requireOrgScope(),
+  requirePermission(PERMISSION_KEYS.userRead),
+  EmployeeController.listLegacy
+);
+v1Router.post(
+  '/employee/register',
+  authenticateAny,
+  requireOrgScope(),
+  requirePermission(PERMISSION_KEYS.userWrite),
+  EmployeeController.create
+);
 
 export default v1Router;

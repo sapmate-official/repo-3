@@ -1,5 +1,16 @@
 import { logger } from '../config/logger.js';
 
+export const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const sanitizeHeaderValue = (value: string): string =>
+  value.replace(/[\r\n]+/g, ' ').trim();
+
 interface EmailRecipient {
   email: string;
   name?: string;
@@ -81,6 +92,11 @@ export class EmailService {
     email: string;
   }): Promise<void> {
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5174';
+    const safeName = escapeHtml(input.name);
+    const safeCompany = escapeHtml(input.company);
+    const safePhoneNumber = escapeHtml(input.phoneNumber);
+    const safeEmail = escapeHtml(input.email);
+    const safeClientUrl = escapeHtml(clientUrl);
 
     // A. Send confirmation email to requester
     const requesterHtml = `
@@ -90,14 +106,14 @@ export class EmailService {
             <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Alkaa Demo Request Received</h1>
           </div>
           <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
-            <p>Hi <strong>${input.name}</strong>,</p>
-            <p>Thank you for your interest in Alkaa HRMS! We have received your request for a personalized demo for <strong>${input.company}</strong>.</p>
-            <p>One of our product specialists will reach out to you within 24 hours at <strong>${input.phoneNumber}</strong> or via this email address to schedule your demo.</p>
+            <p>Hi <strong>${safeName}</strong>,</p>
+            <p>Thank you for your interest in Alkaa HRMS! We have received your request for a personalized demo for <strong>${safeCompany}</strong>.</p>
+            <p>One of our product specialists will reach out to you within 24 hours at <strong>${safePhoneNumber}</strong> or via this email address to schedule your demo.</p>
             <div style="background-color: #f3f4f6; padding: 15px 20px; border-radius: 6px; margin: 25px 0;">
               <h4 style="margin: 0 0 10px 0; color: #111827;">Your Submitted Details:</h4>
-              <p style="margin: 4px 0;"><strong>Company:</strong> ${input.company}</p>
-              <p style="margin: 4px 0;"><strong>Phone:</strong> ${input.phoneNumber}</p>
-              <p style="margin: 4px 0;"><strong>Email:</strong> ${input.email}</p>
+              <p style="margin: 4px 0;"><strong>Company:</strong> ${safeCompany}</p>
+              <p style="margin: 4px 0;"><strong>Phone:</strong> ${safePhoneNumber}</p>
+              <p style="margin: 4px 0;"><strong>Email:</strong> ${safeEmail}</p>
             </div>
             <p>Best regards,<br/><strong>The Alkaa Team</strong></p>
           </div>
@@ -107,7 +123,7 @@ export class EmailService {
 
     await this.sendEmail({
       to: [{ email: input.email, name: input.name }],
-      subject: `Alkaa Demo Request Confirmation - ${input.company}`,
+      subject: sanitizeHeaderValue(`Alkaa Demo Request Confirmation - ${input.company}`),
       htmlContent: requesterHtml
     });
 
@@ -122,18 +138,18 @@ export class EmailService {
     const internalHtml = `
       <div style="font-family: Arial, sans-serif; padding: 20px;">
         <h2>🚀 New Demo Request Submitted</h2>
-        <p><strong>Name:</strong> ${input.name}</p>
-        <p><strong>Company:</strong> ${input.company}</p>
-        <p><strong>Phone:</strong> ${input.phoneNumber}</p>
-        <p><strong>Email:</strong> <a href="mailto:${input.email}">${input.email}</a></p>
-        <p><a href="${clientUrl}/p/onboarding" style="display:inline-block;padding:8px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;">Review in Onboarding Portal</a></p>
+        <p><strong>Name:</strong> ${safeName}</p>
+        <p><strong>Company:</strong> ${safeCompany}</p>
+        <p><strong>Phone:</strong> ${safePhoneNumber}</p>
+        <p><strong>Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></p>
+        <p><a href="${safeClientUrl}/p/onboarding" style="display:inline-block;padding:8px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;">Review in Onboarding Portal</a></p>
         <p><em>Submitted at: ${new Date().toLocaleString()}</em></p>
       </div>
     `;
 
     await this.sendEmail({
       to: internalRecipients,
-      subject: `[New Lead] Demo Request: ${input.company} (${input.name})`,
+      subject: sanitizeHeaderValue(`[New Lead] Demo Request: ${input.company} (${input.name})`),
       htmlContent: internalHtml
     });
   }
@@ -150,25 +166,29 @@ export class EmailService {
     const candidateName = `${candidate.firstName} ${candidate.lastName ?? ''}`.trim();
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5174';
     const onboardingUrl = `${clientUrl.replace(/\/$/, '')}/onboarding/${candidate.token}`;
+    const safeCandidateName = escapeHtml(candidateName);
+    const safeCompanyName = escapeHtml(candidate.companyName);
+    const safeJobTitle = candidate.jobTitle ? escapeHtml(candidate.jobTitle) : null;
+    const safeOnboardingUrl = escapeHtml(onboardingUrl);
 
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
         <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
           <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 100%); padding: 30px 20px; text-align: center; color: white;">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Welcome to ${candidate.companyName}</h1>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Welcome to ${safeCompanyName}</h1>
           </div>
           <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
-            <p>Dear <strong>${candidateName}</strong>,</p>
-            <p>You have been invited to complete your onboarding with <strong>${candidate.companyName}</strong>.</p>
-            ${candidate.jobTitle ? `<p><strong>Role / Position:</strong> ${candidate.jobTitle}</p>` : ''}
+            <p>Dear <strong>${safeCandidateName}</strong>,</p>
+            <p>You have been invited to complete your onboarding with <strong>${safeCompanyName}</strong>.</p>
+            ${safeJobTitle ? `<p><strong>Role / Position:</strong> ${safeJobTitle}</p>` : ''}
             <p>Please use the secure link below to verify your invitation and submit your onboarding details.</p>
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${onboardingUrl}" style="background-color: #2E7D32; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+              <a href="${safeOnboardingUrl}" style="background-color: #2E7D32; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
                 Complete Onboarding
               </a>
             </div>
             <p style="font-size: 13px; color: #6b7280;">This invitation link expires in 14 days. If you were not expecting this email, you can safely ignore it.</p>
-            <p>Best regards,<br/><strong>HR Operations - ${candidate.companyName}</strong></p>
+            <p>Best regards,<br/><strong>HR Operations - ${safeCompanyName}</strong></p>
           </div>
         </div>
       </div>
@@ -176,7 +196,7 @@ export class EmailService {
 
     return this.sendEmail({
       to: [{ email: candidate.email, name: candidateName }],
-      subject: `Complete your onboarding with ${candidate.companyName}`,
+      subject: sanitizeHeaderValue(`Complete your onboarding with ${candidate.companyName}`),
       htmlContent
     });
   }
@@ -190,6 +210,9 @@ export class EmailService {
     jobTitle?: string | null;
   }): Promise<void> {
     const candidateName = `${candidate.firstName} ${candidate.lastName ?? ''}`.trim();
+    const safeCandidateName = escapeHtml(candidateName);
+    const safeCompanyName = escapeHtml(candidate.companyName);
+    const safeJobTitle = candidate.jobTitle ? escapeHtml(candidate.jobTitle) : null;
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
         <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
@@ -197,14 +220,14 @@ export class EmailService {
             <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Onboarding Approved 🎉</h1>
           </div>
           <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
-            <p>Dear <strong>${candidateName}</strong>,</p>
-            <p>Congratulations! Your onboarding profile and submitted documents for <strong>${candidate.companyName}</strong> have been reviewed and <strong>approved</strong> by HR.</p>
-            ${candidate.jobTitle ? `<p><strong>Role / Position:</strong> ${candidate.jobTitle}</p>` : ''}
+            <p>Dear <strong>${safeCandidateName}</strong>,</p>
+            <p>Congratulations! Your onboarding profile and submitted documents for <strong>${safeCompanyName}</strong> have been reviewed and <strong>approved</strong> by HR.</p>
+            ${safeJobTitle ? `<p><strong>Role / Position:</strong> ${safeJobTitle}</p>` : ''}
             <p>Our HR operations team is now completing your official account provisioning. You will receive a subsequent welcome email with your official employee ID and system credentials.</p>
             <div style="background-color: #eff6ff; padding: 15px 20px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 25px 0;">
               <p style="margin: 0; color: #1e40af; font-size: 14px;">Welcome aboard! We are excited to have you join our team.</p>
             </div>
-            <p>Warm regards,<br/><strong>HR Operations - ${candidate.companyName}</strong></p>
+            <p>Warm regards,<br/><strong>HR Operations - ${safeCompanyName}</strong></p>
           </div>
         </div>
       </div>
@@ -212,12 +235,121 @@ export class EmailService {
 
     await this.sendEmail({
       to: [{ email: candidate.email, name: candidateName }],
-      subject: `Congratulations! Your Onboarding with ${candidate.companyName} is Approved`,
+      subject: sanitizeHeaderValue(`Congratulations! Your Onboarding with ${candidate.companyName} is Approved`),
       htmlContent
     });
   }
 
-  // 4. New Provisioned Employee Welcome Email
+  // 4. Leave Request Submitted Notification
+  static async sendLeaveRequestEmail(params: {
+    recipients: string[];
+    employeeName: string;
+    employeeEmail: string;
+    leaveType: string;
+    startDate: Date;
+    endDate: Date;
+    duration: number;
+    reason?: string | null;
+    companyName: string;
+  }): Promise<void> {
+    const recipients = Array.from(
+      new Set(params.recipients.map((email) => email.trim()).filter(Boolean))
+    );
+    if (recipients.length === 0) {
+      return;
+    }
+
+    const employeeName = escapeHtml(params.employeeName || params.employeeEmail);
+    const employeeEmail = escapeHtml(params.employeeEmail);
+    const leaveType = escapeHtml(params.leaveType);
+    const companyName = escapeHtml(params.companyName);
+    const startDate = params.startDate.toISOString().slice(0, 10);
+    const endDate = params.endDate.toISOString().slice(0, 10);
+    const reason = params.reason ? escapeHtml(params.reason) : 'Not provided';
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
+          <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 30px 20px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">New Leave Request</h1>
+          </div>
+          <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
+            <p><strong>${employeeName}</strong> (${employeeEmail}) has submitted a leave request for <strong>${companyName}</strong>.</p>
+            <div style="background-color: #f3f4f6; padding: 15px 20px; border-radius: 6px; margin: 25px 0;">
+              <p style="margin: 6px 0;"><strong>Leave type:</strong> ${leaveType}</p>
+              <p style="margin: 6px 0;"><strong>Dates:</strong> ${startDate} to ${endDate}</p>
+              <p style="margin: 6px 0;"><strong>Duration:</strong> ${params.duration} day(s)</p>
+              <p style="margin: 6px 0;"><strong>Reason:</strong> ${reason}</p>
+            </div>
+            <p>Please review the request in the Alkaa HRMS leave management dashboard.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: recipients.map((email) => ({ email })),
+      subject: sanitizeHeaderValue(`Leave request from ${params.employeeName || params.employeeEmail}`),
+      htmlContent
+    });
+  }
+
+  // 5. Leave Request Status Update
+  static async sendLeaveStatusUpdateEmail(params: {
+    email: string;
+    name: string;
+    leaveType: string;
+    startDate: Date;
+    endDate: Date;
+    duration: number;
+    status: string;
+    rejectedReason?: string | null;
+    companyName: string;
+  }): Promise<void> {
+    const safeName = escapeHtml(params.name || params.email);
+    const safeLeaveType = escapeHtml(params.leaveType);
+    const safeCompanyName = escapeHtml(params.companyName);
+    const safeStatus = escapeHtml(params.status);
+    const startDate = params.startDate.toISOString().slice(0, 10);
+    const endDate = params.endDate.toISOString().slice(0, 10);
+    const accentColor = params.status === 'APPROVED'
+      ? '#059669'
+      : params.status === 'REJECTED'
+        ? '#dc2626'
+        : '#6b7280';
+    const reasonBlock = params.rejectedReason
+      ? `<p style="margin: 6px 0;"><strong>Rejection reason:</strong> ${escapeHtml(params.rejectedReason)}</p>`
+      : '';
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
+          <div style="background: ${accentColor}; padding: 30px 20px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Leave Request ${safeStatus}</h1>
+          </div>
+          <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
+            <p>Hi <strong>${safeName}</strong>,</p>
+            <p>Your leave request for <strong>${safeCompanyName}</strong> has been <strong>${safeStatus.toLowerCase()}</strong>.</p>
+            <div style="background-color: #f3f4f6; padding: 15px 20px; border-radius: 6px; margin: 25px 0;">
+              <p style="margin: 6px 0;"><strong>Leave type:</strong> ${safeLeaveType}</p>
+              <p style="margin: 6px 0;"><strong>Dates:</strong> ${startDate} to ${endDate}</p>
+              <p style="margin: 6px 0;"><strong>Duration:</strong> ${params.duration} day(s)</p>
+              ${reasonBlock}
+            </div>
+            <p>You can review the request in the Alkaa HRMS leave management dashboard.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: [{ email: params.email, name: params.name }],
+      subject: sanitizeHeaderValue(`Leave request ${params.status.toLowerCase()} - ${params.leaveType}`),
+      htmlContent
+    });
+  }
+
+  // 6. New Provisioned Employee Welcome Email
   static async sendNewEmployeeWelcomeEmail(params: {
     email: string;
     name: string;
@@ -227,22 +359,28 @@ export class EmailService {
     loginUrl?: string;
   }): Promise<void> {
     const loginUrl = params.loginUrl ?? process.env.CLIENT_URL ?? 'http://localhost:5174';
+    const safeCompanyName = escapeHtml(params.companyName);
+    const safeName = escapeHtml(params.name);
+    const safeEmployeeId = escapeHtml(params.employeeId);
+    const safeEmail = escapeHtml(params.email);
+    const safeTemporaryPassword = escapeHtml(params.temporaryPassword);
+    const safeLoginUrl = escapeHtml(loginUrl);
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
         <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
           <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 30px 20px; text-align: center; color: white;">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Welcome to ${params.companyName}!</h1>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Welcome to ${safeCompanyName}!</h1>
           </div>
           <div style="padding: 30px; color: #374151; font-size: 15px; line-height: 1.6;">
-            <p>Hi <strong>${params.name}</strong>,</p>
+            <p>Hi <strong>${safeName}</strong>,</p>
             <p>Your employee account has been created. Here are your portal access credentials:</p>
             <div style="background-color: #f3f4f6; padding: 15px 20px; border-radius: 6px; margin: 25px 0;">
-              <p style="margin: 6px 0;"><strong>Employee ID:</strong> <code>${params.employeeId}</code></p>
-              <p style="margin: 6px 0;"><strong>Login Email:</strong> ${params.email}</p>
-              <p style="margin: 6px 0;"><strong>Temporary Password:</strong> <code>${params.temporaryPassword}</code></p>
+              <p style="margin: 6px 0;"><strong>Employee ID:</strong> <code>${safeEmployeeId}</code></p>
+              <p style="margin: 6px 0;"><strong>Login Email:</strong> ${safeEmail}</p>
+              <p style="margin: 6px 0;"><strong>Temporary Password:</strong> <code>${safeTemporaryPassword}</code></p>
             </div>
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${loginUrl}" style="background-color: #059669; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+              <a href="${safeLoginUrl}" style="background-color: #059669; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
                 Login to Employee Portal
               </a>
             </div>
@@ -254,7 +392,7 @@ export class EmailService {
 
     await this.sendEmail({
       to: [{ email: params.email, name: params.name }],
-      subject: `Welcome to ${params.companyName} - Your Account Credentials`,
+      subject: sanitizeHeaderValue(`Welcome to ${params.companyName} - Your Account Credentials`),
       htmlContent
     });
   }

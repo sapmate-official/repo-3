@@ -467,6 +467,26 @@ export class OnboardingService {
       throw new AppError('Designated role not found in organization.', 400, 'INVALID_ROLE');
     }
 
+    if (departmentId) {
+      const department = await prisma.department.findFirst({
+        where: { id: departmentId, orgId },
+        select: { id: true }
+      });
+      if (!department) {
+        throw new AppError('Designated department not found in organization.', 400, 'INVALID_DEPARTMENT');
+      }
+    }
+
+    if (managerId) {
+      const manager = await prisma.user.findFirst({
+        where: { id: managerId, orgId },
+        select: { id: true }
+      });
+      if (!manager) {
+        throw new AppError('Designated reporting manager not found in organization.', 400, 'INVALID_MANAGER');
+      }
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {

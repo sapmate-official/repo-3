@@ -21,11 +21,17 @@ export const requireOrgScope = (paramName = 'orgId') => {
     }
 
     const body = req.body as Record<string, unknown> | undefined;
+    const nestedBody =
+      typeof body?.data === 'object' && body.data !== null && !Array.isArray(body.data)
+        ? (body.data as Record<string, unknown>)
+        : undefined;
     const query = req.query as Record<string, unknown> | undefined;
     const requestedOrgId =
       readString(req.params[paramName]) ??
       readString(body?.[paramName]) ??
-      readString(query?.[paramName]);
+      readString(nestedBody?.[paramName]) ??
+      readString(query?.[paramName]) ??
+      readString(req.headers['x-org-id']);
 
     // If no orgId is specified in request, force the user's authenticated orgId
     if (!requestedOrgId) {

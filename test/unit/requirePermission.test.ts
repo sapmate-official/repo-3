@@ -1,12 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
-import { requirePermission, requireRole } from '../../src/middleware/requirePermission.js';
+import {
+  requireAnyPermission,
+  requirePermission,
+  requireRole,
+  requireSelfOrPermission
+} from '../../src/middleware/requirePermission.js';
 
 const invoke = (
-  middleware: ReturnType<typeof requirePermission> | ReturnType<typeof requireRole>,
-  user?: unknown
+  middleware:
+    | ReturnType<typeof requireAnyPermission>
+    | ReturnType<typeof requirePermission>
+    | ReturnType<typeof requireRole>
+    | ReturnType<typeof requireSelfOrPermission>,
+  user?: unknown,
+  params: Record<string, string> = {},
+  query: Record<string, string> = {}
 ) => {
-  const req = { user } as unknown as Request;
+  const req = { user, params, query } as unknown as Request;
   const json = vi.fn();
   const res = {
     status: vi.fn().mockReturnThis(),
@@ -66,6 +77,95 @@ describe('requirePermission', () => {
       permissions: []
     });
     expect(next).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requireAnyPermission', () => {
+  it('allows a user with any one of the accepted permissions', () => {
+    const { next } = invoke(requireAnyPermission(['leave_request', 'approve_leave']), {
+      roles: ['Employee'],
+      permissions: ['leave_request']
+    });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows the default Org_Admin role', () => {
+    const { next } = invoke(requireAnyPermission(['leave_request']), {
+      roles: ['Org_Admin'],
+      permissions: []
+    });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a user with none of the accepted permissions', () => {
+    const { next, status } = invoke(requireAnyPermission(['leave_request', 'approve_leave']), {
+      roles: ['Employee'],
+      permissions: ['view_personal_info_to_myself']
+    });
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated requests', () => {
+    const { next, status } = invoke(requireAnyPermission(['leave_request']));
+    expect(status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireSelfOrPermission', () => {
+  it('allows a user to access their own resource', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      roles: ['Employee'],
+      permissions: []
+    }, { id: 'user-1' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows a user to access their own resource by employee id', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      employeeId: 'EMP001',
+      roles: ['Employee'],
+      permissions: []
+    }, { id: 'EMP001' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows a user to access their own resource through the query string', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      employeeId: 'EMP001',
+      roles: ['Employee'],
+      permissions: []
+    }, {}, { id: 'user-1' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows a user with the required permission', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      roles: ['HR Manager'],
+      permissions: ['user_read']
+    }, { id: 'user-2' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('rejects access to another user without permission', () => {
+    const { next, status } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      roles: ['Employee'],
+      permissions: ['view_personal_info_to_myself']
+    }, { id: 'user-2' });
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated requests', () => {
+    const { next, status } = invoke(requireSelfOrPermission('user_read'));
+    expect(status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
   });
 });
 

@@ -8,29 +8,26 @@ import type {
   PastAttendanceInput,
   AttendanceFilterInput
 } from './attendance.schema.js';
+import type { AttendanceActor } from './attendance.access.js';
+import {
+  canViewAllAttendance,
+  canViewUserAttendance,
+  canVerifyUserAttendance
+} from './attendance.access.js';
+import {
+  getDateKeyInTimeZone,
+  getTimeZone,
+  isSameDateKey,
+  parseDateOnly,
+  parseDateTime,
+  parseStartAndEndOfDay
+} from './attendance.time.js';
 
 export interface DurationInfo {
   hours: number;
   minutes: number;
   totalMinutes: number;
 }
-
-export interface AuthenticatedActor {
-  id: string;
-  orgId?: string;
-  isSuperAdmin?: boolean;
-  roles?: string[];
-  permissions?: string[];
-}
-
-const parseStartAndEndOfDay = (dateStr: string) => {
-  const d = new Date(dateStr);
-  const start = new Date(d);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(d);
-  end.setUTCHours(23, 59, 59, 999);
-  return { date: start, start, end };
-};
 
 const calculateDuration = (checkInTime: Date, checkOutTime: Date): DurationInfo => {
   const durationMs = Math.max(0, checkOutTime.getTime() - checkInTime.getTime());
@@ -44,24 +41,47 @@ const calculateDuration = (checkInTime: Date, checkOutTime: Date): DurationInfo 
   };
 };
 
-const determineStatus = (totalHours: number): AttendanceStatus => {
-  if (totalHours >= 8) {
+const determineStatus = (totalMinutes: number): AttendanceStatus => {
+  if (totalMinutes >= 8 * 60) {
     return 'PRESENT';
   }
-  if (totalHours >= 4) {
+  if (totalMinutes >= 4 * 60) {
     return 'HALF_DAY';
   }
-  if (totalHours > 0) {
+  if (totalMinutes > 0) {
     return 'EARLY_DEPARTURE';
   }
   return 'ABSENT';
 };
 
-const checkIsElevated = (actor: AuthenticatedActor): boolean => {
-  if (actor.isSuperAdmin) {
-    return true;
-  }
-  return actor.roles ? actor.roles.some((r) => ['Org_Admin', 'HR Executive', 'SuperAdmin'].includes(r)) : false;
+const getOrganizationTimeZone = async (orgId: string): Promise<string> => {
+  const organization = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { timezone: true }
+  });
+  return getTimeZone(organization?.timezone);
+};
+
+const recalculateDailyStatus = async (userId: string, date: Date): Promise<AttendanceStatus> => {
+  const records = await prisma.attendanceRecord.findMany({
+    where: { userId, date }
+  });
+
+  const totalMinutes = records.reduce((total, record) => {
+    if (!record.checkOutTime) {
+      return total;
+    }
+    return total + calculateDuration(new Date(record.checkInTime), new Date(record.checkOutTime)).totalMinutes;
+  }, 0);
+
+  const status = determineStatus(totalMinutes);
+
+  await prisma.attendanceRecord.updateMany({
+    where: { userId, date, checkOutTime: { not: null } },
+    data: { status }
+  });
+
+  return status;
 };
 
 export class AttendanceService {
@@ -79,24 +99,22 @@ export class AttendanceService {
       throw new AppError('User not found in organization', 404, 'USER_NOT_FOUND');
     }
 
-    const { date: attendanceDate } = parseStartAndEndOfDay(input.date);
-    const checkInDateTime = new Date(input.checkInTime);
     const now = new Date();
+    const timeZone = await getOrganizationTimeZone(orgId);
+    const attendanceDateKey = getDateKeyInTimeZone(now, timeZone);
+    const attendanceDate = parseDateOnly(attendanceDateKey);
 
-    if (user.hiredDate && attendanceDate < new Date(user.hiredDate)) {
-      throw new AppError(
-        'Cannot check in for a date prior to employment hired date',
-        400,
-        'BEFORE_HIRED_DATE'
-      );
+    if (user.hiredDate) {
+      const hiredDateKey = getDateKeyInTimeZone(new Date(user.hiredDate), timeZone);
+      if (attendanceDateKey < hiredDateKey) {
+        throw new AppError(
+          'Cannot check in for a date prior to employment hired date',
+          400,
+          'BEFORE_HIRED_DATE'
+        );
+      }
     }
 
-    // Do not allow check in beyond 1 day in the future
-    if (attendanceDate.getTime() > now.getTime() + 24 * 60 * 60 * 1000) {
-      throw new AppError('Cannot check in for future dates', 400, 'FUTURE_DATE_INVALID');
-    }
-
-    // Check for ongoing session without checkout
     const ongoingSession = await prisma.attendanceRecord.findFirst({
       where: {
         userId,
@@ -113,7 +131,6 @@ export class AttendanceService {
       );
     }
 
-    // Determine next session number for this day
     const lastSession = await prisma.attendanceRecord.findFirst({
       where: { userId, date: attendanceDate },
       orderBy: { sessionNumber: 'desc' }
@@ -125,7 +142,7 @@ export class AttendanceService {
         userId,
         date: attendanceDate,
         sessionNumber,
-        checkInTime: checkInDateTime,
+        checkInTime: now,
         checkInLocation: input.checkInLocation as unknown as Prisma.InputJsonValue,
         notes: input.notes ?? null,
         status: 'PRESENT',
@@ -151,23 +168,14 @@ export class AttendanceService {
       throw new AppError('User not found in organization', 404, 'USER_NOT_FOUND');
     }
 
-    const { date: attendanceDate } = parseStartAndEndOfDay(input.date);
-    const checkOutDateTime = new Date(input.checkOutTime);
+    const now = new Date();
+    const timeZone = await getOrganizationTimeZone(orgId);
+    const todayKey = getDateKeyInTimeZone(now, timeZone);
 
-    // Find active session for today or fallback to latest unclosed session
-    let activeSession = await prisma.attendanceRecord.findFirst({
-      where: {
-        userId,
-        date: attendanceDate,
-        checkOutTime: null
-      }
-    });
-
-    activeSession ??= await prisma.attendanceRecord.findFirst({
-      where: {
-        userId,
-        checkOutTime: null
-      },
+    const activeSession = await prisma.attendanceRecord.findFirst({
+      where: input.checkInId
+        ? { id: input.checkInId, userId, checkOutTime: null }
+        : { userId, checkOutTime: null },
       orderBy: { checkInTime: 'desc' }
     });
 
@@ -175,11 +183,19 @@ export class AttendanceService {
       throw new AppError('No active work session found to check out from.', 400, 'NO_ACTIVE_SESSION');
     }
 
-    if (checkOutDateTime <= new Date(activeSession.checkInTime)) {
+    if (!isSameDateKey(new Date(activeSession.date), todayKey)) {
+      throw new AppError(
+        'This session is from a previous day. Use past checkout to regularize it.',
+        400,
+        'PAST_SESSION_REQUIRES_REGULARIZATION'
+      );
+    }
+
+    if (now <= new Date(activeSession.checkInTime)) {
       throw new AppError('Check-out time must be after check-in time', 400, 'CHECKOUT_BEFORE_CHECKIN');
     }
 
-    const sessionDuration = calculateDuration(new Date(activeSession.checkInTime), checkOutDateTime);
+    const sessionDuration = calculateDuration(new Date(activeSession.checkInTime), now);
 
     // Fetch all completed sessions for this date to calculate daily total
     const existingSessions = await prisma.attendanceRecord.findMany({
@@ -202,12 +218,12 @@ export class AttendanceService {
     const dailyTotalMinutes = totalMinutesSoFar + sessionDuration.totalMinutes;
     const dailyTotalHours = Math.floor(dailyTotalMinutes / 60);
     const dailyTotalRemainder = dailyTotalMinutes % 60;
-    const finalDailyStatus = determineStatus(dailyTotalHours);
+    const finalDailyStatus = determineStatus(dailyTotalMinutes);
 
     const updatedSession = await prisma.attendanceRecord.update({
       where: { id: activeSession.id },
       data: {
-        checkOutTime: checkOutDateTime,
+        checkOutTime: now,
         checkOutLocation: input.checkOutLocation as unknown as Prisma.InputJsonValue,
         notes: input.notes ?? activeSession.notes,
         status: finalDailyStatus,
@@ -216,6 +232,8 @@ export class AttendanceService {
         deviceInfo: userAgent ?? activeSession.deviceInfo
       }
     });
+
+    const recalculatedStatus = await recalculateDailyStatus(userId, new Date(activeSession.date));
 
     let reportCreated = false;
     if (input.reportContent) {
@@ -232,7 +250,7 @@ export class AttendanceService {
     }
 
     return {
-      session: updatedSession,
+      session: { ...updatedSession, status: recalculatedStatus },
       dailyTotal: {
         hours: dailyTotalHours,
         minutes: dailyTotalRemainder,
@@ -259,8 +277,8 @@ export class AttendanceService {
   }
 
   static async getPastUncheckedSessions(orgId: string, userId: string) {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const timeZone = await getOrganizationTimeZone(orgId);
+    const today = parseDateOnly(getDateKeyInTimeZone(new Date(), timeZone));
 
     return prisma.attendanceRecord.findMany({
       where: {
@@ -286,24 +304,47 @@ export class AttendanceService {
       throw new AppError('Attendance record not found', 404, 'RECORD_NOT_FOUND');
     }
 
-    const checkOutDateTime = new Date(input.checkOutTime);
+    if (record.verificationStatus === 'VERIFIED') {
+      throw new AppError('Verified attendance records cannot be modified', 409, 'VERIFIED_RECORD_IMMUTABLE');
+    }
+
+    if (record.checkOutTime) {
+      throw new AppError('This session has already been checked out', 409, 'ALREADY_CHECKED_OUT');
+    }
+
+    const checkOutDateTime = parseDateTime(input.checkOutTime, 'checkOutTime');
+    const now = new Date();
+
+    if (checkOutDateTime > now) {
+      throw new AppError('Check-out time cannot be in the future', 400, 'FUTURE_DATETIME_INVALID');
+    }
+
     if (checkOutDateTime <= new Date(record.checkInTime)) {
       throw new AppError('Check-out time must be after check-in time', 400, 'CHECKOUT_BEFORE_CHECKIN');
     }
 
-    const duration = calculateDuration(new Date(record.checkInTime), checkOutDateTime);
-    const status = determineStatus(duration.hours);
+    const orgTimeZone = await getOrganizationTimeZone(orgId);
+    const timeZone = getTimeZone(input.clientTimezone, orgTimeZone);
+    const recordDateKey = new Date(record.date).toISOString().slice(0, 10);
+    if (getDateKeyInTimeZone(checkOutDateTime, timeZone) !== recordDateKey) {
+      throw new AppError('Check-out time must be on the attendance date', 400, 'CHECKOUT_DATE_MISMATCH');
+    }
 
-    return prisma.attendanceRecord.update({
+    const duration = calculateDuration(new Date(record.checkInTime), checkOutDateTime);
+
+    const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
         checkOutTime: checkOutDateTime,
         notes: input.notes ? `${record.notes ?? ''} | Regularized: ${input.notes}`.trim() : record.notes,
         duration: duration as unknown as Prisma.InputJsonValue,
-        status,
+        status: determineStatus(duration.totalMinutes),
         verificationStatus: 'UNVERIFIED'
       }
     });
+
+    const status = await recalculateDailyStatus(userId, new Date(record.date));
+    return { ...updated, status };
   }
 
   static async createPastAttendance(orgId: string, userId: string, input: PastAttendanceInput) {
@@ -314,12 +355,65 @@ export class AttendanceService {
       throw new AppError('User not found in organization', 404, 'USER_NOT_FOUND');
     }
 
-    const { date: attendanceDate } = parseStartAndEndOfDay(input.date);
-    const checkIn = new Date(input.checkInTime);
-    const checkOut = new Date(input.checkOutTime);
+    const now = new Date();
+    const orgTimeZone = await getOrganizationTimeZone(orgId);
+    const timeZone = getTimeZone(input.clientTimezone, orgTimeZone);
+    const attendanceDate = parseDateOnly(input.date);
+    const todayKey = getDateKeyInTimeZone(now, orgTimeZone);
+
+    if (input.date > todayKey) {
+      throw new AppError('Cannot add attendance for future dates', 400, 'FUTURE_DATE_INVALID');
+    }
+
+    if (user.hiredDate) {
+      const hiredDateKey = getDateKeyInTimeZone(new Date(user.hiredDate), orgTimeZone);
+      if (input.date < hiredDateKey) {
+        throw new AppError(
+          'Cannot add attendance for a date prior to employment hired date',
+          400,
+          'BEFORE_HIRED_DATE'
+        );
+      }
+    }
+
+    const checkIn = parseDateTime(input.checkInTime, 'checkInTime');
+    const checkOut = parseDateTime(input.checkOutTime, 'checkOutTime');
 
     if (checkOut <= checkIn) {
       throw new AppError('Check-out time must be after check-in time', 400, 'CHECKOUT_BEFORE_CHECKIN');
+    }
+
+    if (checkOut > now) {
+      throw new AppError('Check-out time cannot be in the future', 400, 'FUTURE_DATETIME_INVALID');
+    }
+
+    if (
+      getDateKeyInTimeZone(checkIn, timeZone) !== input.date ||
+      getDateKeyInTimeZone(checkOut, timeZone) !== input.date
+    ) {
+      throw new AppError('Check-in and check-out times must be on the selected date', 400, 'DATE_MISMATCH');
+    }
+
+    const overlapping = await prisma.attendanceRecord.findFirst({
+      where: {
+        userId,
+        date: attendanceDate,
+        OR: [
+          { checkOutTime: null },
+          {
+            checkInTime: { lt: checkOut },
+            checkOutTime: { gt: checkIn }
+          }
+        ]
+      }
+    });
+
+    if (overlapping) {
+      throw new AppError(
+        'An attendance session already exists for the selected time',
+        409,
+        'OVERLAPPING_ATTENDANCE'
+      );
     }
 
     const lastSession = await prisma.attendanceRecord.findFirst({
@@ -329,9 +423,8 @@ export class AttendanceService {
     const sessionNumber = (lastSession?.sessionNumber ?? 0) + 1;
 
     const duration = calculateDuration(checkIn, checkOut);
-    const status = determineStatus(duration.hours);
 
-    return prisma.attendanceRecord.create({
+    const record = await prisma.attendanceRecord.create({
       data: {
         userId,
         date: attendanceDate,
@@ -342,17 +435,38 @@ export class AttendanceService {
         checkOutLocation: input.checkOutLocation as unknown as Prisma.InputJsonValue,
         notes: input.reason ? `Past entry request: ${input.reason}` : input.notes,
         duration: duration as unknown as Prisma.InputJsonValue,
-        status,
+        status: determineStatus(duration.totalMinutes),
         verificationStatus: 'UNVERIFIED'
       }
     });
+
+    const status = await recalculateDailyStatus(userId, attendanceDate);
+    return { ...record, status };
   }
 
   static async getUserAttendanceHistory(
     orgId: string,
+    actor: AttendanceActor,
     targetUserId: string,
     filters: AttendanceFilterInput
   ) {
+    const target = await prisma.user.findFirst({
+      where: { id: targetUserId, orgId },
+      select: { id: true, managerId: true }
+    });
+
+    if (!target) {
+      throw new AppError('User not found in organization', 404, 'USER_NOT_FOUND');
+    }
+
+    if (!canViewUserAttendance(actor, target)) {
+      throw new AppError(
+        'Access denied. You can only view your own attendance or your direct reports.',
+        403,
+        'INSUFFICIENT_PERMISSIONS'
+      );
+    }
+
     const page = filters.page;
     const limit = filters.limit;
     const skip = (page - 1) * limit;
@@ -370,8 +484,8 @@ export class AttendanceService {
     }
     if (filters.startDate || filters.endDate) {
       where.date = {
-        ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
-        ...(filters.endDate ? { lte: new Date(filters.endDate) } : {})
+        ...(filters.startDate ? { gte: parseStartAndEndOfDay(filters.startDate, 'startDate').start } : {}),
+        ...(filters.endDate ? { lte: parseStartAndEndOfDay(filters.endDate, 'endDate').end } : {})
       };
     } else if (filters.date) {
       const { start, end } = parseStartAndEndOfDay(filters.date);
@@ -404,16 +518,14 @@ export class AttendanceService {
 
   static async getLiveAttendance(
     orgId: string,
-    actor: AuthenticatedActor,
+    actor: AttendanceActor,
     managerIdFilter?: string
   ) {
-    const today = new Date();
-    const startOfDay = new Date(today);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(today);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    const timeZone = await getOrganizationTimeZone(orgId);
+    const todayKey = getDateKeyInTimeZone(new Date(), timeZone);
+    const { start: startOfDay, end: endOfDay } = parseStartAndEndOfDay(todayKey);
 
-    const isElevated = checkIsElevated(actor);
+    const isElevated = canViewAllAttendance(actor);
 
     const whereUser: Prisma.UserWhereInput = {
       orgId,
@@ -421,9 +533,8 @@ export class AttendanceService {
     };
 
     if (!isElevated) {
-      // Regular managers are strictly restricted to their direct subordinates
       whereUser.managerId = actor.id;
-    } else if (managerIdFilter) {
+    } else if (managerIdFilter && managerIdFilter !== 'all' && managerIdFilter !== actor.id) {
       whereUser.managerId = managerIdFilter;
     }
 
@@ -469,10 +580,10 @@ export class AttendanceService {
 
   static async getVerificationQueue(
     orgId: string,
-    actor: AuthenticatedActor,
+    actor: AttendanceActor,
     managerIdParam?: string
   ) {
-    const isElevated = checkIsElevated(actor);
+    const isElevated = canViewAllAttendance(actor);
 
     const where: Prisma.AttendanceRecordWhereInput = {
       user: { orgId },
@@ -481,7 +592,7 @@ export class AttendanceService {
 
     if (!isElevated) {
       where.user = { orgId, managerId: actor.id };
-    } else if (managerIdParam && managerIdParam !== 'all') {
+    } else if (managerIdParam && managerIdParam !== 'all' && managerIdParam !== actor.id) {
       where.user = { orgId, managerId: managerIdParam };
     }
 
@@ -520,10 +631,10 @@ export class AttendanceService {
 
   static async verifyAttendance(
     orgId: string,
-    actor: AuthenticatedActor,
+    actor: AttendanceActor,
     attendanceId: string,
     verificationStatus: 'VERIFIED' | 'REJECTED',
-    _remarks?: string
+    remarks?: string
   ) {
     const record = await prisma.attendanceRecord.findFirst({
       where: { id: attendanceId },
@@ -536,9 +647,7 @@ export class AttendanceService {
       throw new AppError('Attendance record not found in organization', 404, 'RECORD_NOT_FOUND');
     }
 
-    const isElevated = checkIsElevated(actor);
-
-    if (!isElevated && record.user.managerId !== actor.id) {
+    if (!canVerifyUserAttendance(actor, record.user)) {
       throw new AppError(
         'Access denied. You can only verify attendance records for your direct subordinates.',
         403,
@@ -546,17 +655,23 @@ export class AttendanceService {
       );
     }
 
+    const trimmedRemarks = remarks?.trim();
+    const notes = trimmedRemarks
+      ? `${record.notes ? `${record.notes} | ` : ''}Verification: ${trimmedRemarks}`
+      : record.notes;
+
     return prisma.attendanceRecord.update({
       where: { id: attendanceId },
       data: {
         verificationStatus,
+        notes,
         verifiedAt: new Date(),
         verifiedBy: actor.id
       }
     });
   }
 
-  static async deleteAttendance(orgId: string, id: string, actor: AuthenticatedActor) {
+  static async deleteAttendance(orgId: string, id: string, actor: AttendanceActor) {
     const record = await prisma.attendanceRecord.findFirst({
       where: { id },
       include: { user: { select: { orgId: true } } }
@@ -566,9 +681,11 @@ export class AttendanceService {
       throw new AppError('Attendance record not found', 404, 'RECORD_NOT_FOUND');
     }
 
-    const isElevated = checkIsElevated(actor);
+    if (record.verificationStatus === 'VERIFIED') {
+      throw new AppError('Verified attendance records cannot be deleted', 409, 'VERIFIED_RECORD_IMMUTABLE');
+    }
 
-    if (!isElevated && record.userId !== actor.id) {
+    if (!canViewAllAttendance(actor) && record.userId !== actor.id) {
       throw new AppError('You can only delete your own attendance requests', 403, 'FORBIDDEN');
     }
 

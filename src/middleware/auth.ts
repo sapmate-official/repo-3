@@ -13,6 +13,7 @@ import '../types/auth.js';
 interface UserRecord {
   id: string;
   email: string;
+  employeeId: string;
   orgId: string;
   firstName: string | null;
   lastName: string | null;
@@ -28,6 +29,7 @@ interface UserRecord {
 const userSelect = {
   id: true,
   email: true,
+  employeeId: true,
   orgId: true,
   firstName: true,
   lastName: true,
@@ -112,6 +114,7 @@ const attachUser = (req: Request, user: UserRecord): void => {
   req.user = {
     id: user.id,
     email: user.email,
+    employeeId: user.employeeId,
     orgId: user.orgId,
     firstName: user.firstName,
     lastName: user.lastName,

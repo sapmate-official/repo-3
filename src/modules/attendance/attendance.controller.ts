@@ -130,17 +130,14 @@ export class AttendanceController {
   static async getHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const orgId = req.user?.orgId;
-      if (!orgId) {
+      const user = req.user;
+      if (!orgId || !user) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
-      const targetUserId = strParam(req.params.id) ?? strParam(req.query.userId) ?? req.user?.id;
-      if (!targetUserId) {
-        throw new AppError('Target user ID required', 400, 'USER_ID_REQUIRED');
-      }
-
+      const targetUserId = strParam(req.params.id) ?? strParam(req.query.userId) ?? user.id;
       const filters = attendanceFilterSchema.parse(req.query);
-      const result = await AttendanceService.getUserAttendanceHistory(orgId, targetUserId, filters);
+      const result = await AttendanceService.getUserAttendanceHistory(orgId, user, targetUserId, filters);
       res.status(200).json(result);
     } catch (error) {
       next(error);

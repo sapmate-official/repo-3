@@ -82,4 +82,41 @@ describe('requireOrgScope', () => {
     const res = await request(app).post('/items').send({ orgId: 'org-b' });
     expect(res.status).toBe(403);
   });
+
+  it('rejects a mismatched orgId supplied in nested data', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      (req as unknown as { user?: unknown }).user = user;
+      next();
+    });
+    app.post('/items', requireOrgScope('orgId'), (req, res) => {
+      res.status(200).json({ orgId: req.body.data.orgId });
+    });
+
+    const res = await request(app).post('/items').send({ data: { orgId: 'org-b' } });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('TENANT_MISMATCH');
+  });
+
+  it('rejects a mismatched orgId supplied in the header', async () => {
+    const res = await request(buildApp(user)).get('/items').set('x-org-id', 'org-b');
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('TENANT_MISMATCH');
+  });
+
+  it('allows a matching orgId supplied in nested data', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      (req as unknown as { user?: unknown }).user = user;
+      next();
+    });
+    app.post('/items', requireOrgScope('orgId'), (req, res) => {
+      res.status(200).json({ orgId: req.body.data.orgId });
+    });
+
+    const res = await request(app).post('/items').send({ data: { orgId: 'org-a' } });
+    expect(res.status).toBe(200);
+  });
 });

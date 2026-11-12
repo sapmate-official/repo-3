@@ -259,14 +259,15 @@ export class EmployeeService {
     }
 
     // 4. Validate roles belong to organization
+    const roleIds = Array.from(new Set(input.roleIds));
     const roles = await prisma.role.findMany({
       where: {
-        id: { in: input.roleIds },
+        id: { in: roleIds },
         orgId
       }
     });
-    if (roles.length === 0) {
-      throw new AppError('At least one valid organization role is required.', 400, 'INVALID_ROLE');
+    if (roleIds.length === 0 || roles.length !== roleIds.length) {
+      throw new AppError('All selected roles must belong to your organization.', 400, 'INVALID_ROLE');
     }
 
     // Generate secure temporary random password and verificationToken
@@ -412,17 +413,31 @@ export class EmployeeService {
       }
     }
 
+    const roleIds = input.roleIds ? Array.from(new Set(input.roleIds)) : undefined;
+    if (roleIds) {
+      const roles = await prisma.role.findMany({
+        where: {
+          id: { in: roleIds },
+          orgId
+        },
+        select: { id: true }
+      });
+      if (roleIds.length === 0 || roles.length !== roleIds.length) {
+        throw new AppError('All selected roles must belong to your organization.', 400, 'INVALID_ROLE');
+      }
+    }
+
     const annualPackage = input.annualPackage !== undefined ? input.annualPackage : undefined;
     const monthlySalary = input.monthlySalary !== undefined ? input.monthlySalary : undefined;
 
     const updated = await prisma.$transaction(async (tx) => {
       // If roleIds supplied, reset roles
-      if (input.roleIds && input.roleIds.length > 0) {
+      if (roleIds && roleIds.length > 0) {
         await tx.userRole.deleteMany({
           where: { userId }
         });
         await tx.userRole.createMany({
-          data: input.roleIds.map((roleId) => ({
+          data: roleIds.map((roleId) => ({
             userId,
             roleId
           }))
@@ -515,30 +530,31 @@ export class EmployeeService {
     const employee = await this.getEmployeeById(orgId, id);
     const userId = employee.id;
 
-    // Soft deactivation or hard delete within a safe transaction
     await prisma.$transaction(async (tx) => {
-      // Remove dependent sub-tables
-      await tx.userRole.deleteMany({ where: { userId } });
-      await tx.bankDetails.deleteMany({ where: { userId } });
-      await tx.salaryParameter.deleteMany({ where: { userId } });
-      await tx.leaveBalance.deleteMany({ where: { userId } });
       await tx.organization_admin.deleteMany({ where: { adminId: userId } });
       await tx.authSession.deleteMany({ where: { userId } });
       await tx.emailOtpVerification.deleteMany({ where: { userId } });
 
-      // Unassign reporting manager relationship from subordinates
       await tx.user.updateMany({
         where: { managerId: userId },
         data: { managerId: null }
       });
 
-      // Delete the user
-      await tx.user.delete({
-        where: { id: userId }
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          status: 'inactive',
+          terminationDate: new Date(),
+          refreshToken: null
+        }
       });
     });
 
-    return { message: 'Employee deleted successfully', employeeId: employee.employeeId };
+    return {
+      message: 'Employee deactivated successfully',
+      employeeId: employee.employeeId,
+      deactivated: true
+    };
   }
 
   static async listSubordinates(orgId: string, managerId: string) {

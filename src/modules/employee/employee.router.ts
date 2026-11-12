@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { EmployeeController } from './employee.controller.js';
 import { authenticateAny } from '../../middleware/auth.js';
 import { requireOrgScope } from '../../middleware/requireOrgScope.js';
+import { requirePermission, requireSelfOrPermission } from '../../middleware/requirePermission.js';
+import { PERMISSION_KEYS } from '../auth/permissionKeys.js';
 import { validate } from '../../middleware/validate.js';
 import {
   listEmployeesQuerySchema,
@@ -17,26 +19,26 @@ export const employeeRouter = Router();
 employeeRouter.use(authenticateAny);
 
 // Generate & check employee ID
-employeeRouter.get('/employee-id/:orgId', requireOrgScope(), EmployeeController.generateId);
-employeeRouter.get('/employee-id/:orgId/check/:employeeId', validate({ params: checkEmployeeIdParamSchema }), requireOrgScope(), EmployeeController.checkId);
+employeeRouter.get('/employee-id/:orgId', requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.generateId);
+employeeRouter.get('/employee-id/:orgId/check/:employeeId', validate({ params: checkEmployeeIdParamSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.checkId);
 
 // List employees (supports server-side pagination, filters, sorting)
-employeeRouter.get('/', validate({ query: listEmployeesQuerySchema }), requireOrgScope(), EmployeeController.list);
+employeeRouter.get('/', validate({ query: listEmployeesQuerySchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userRead), EmployeeController.list);
 
 // Get single employee by ID or employeeId
-employeeRouter.get('/:id', validate({ params: employeeIdParamSchema }), requireOrgScope(), EmployeeController.getById);
+employeeRouter.get('/:id', validate({ params: employeeIdParamSchema }), requireOrgScope(), requireSelfOrPermission(PERMISSION_KEYS.userRead), EmployeeController.getById);
 
 // Create employee
-employeeRouter.post('/', validate({ body: createEmployeeSchema }), requireOrgScope(), EmployeeController.create);
+employeeRouter.post('/', validate({ body: createEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.create);
 
 // Update employee (supports /:id and query /?id=...)
-employeeRouter.put('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), EmployeeController.update);
-employeeRouter.put('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), EmployeeController.update);
-employeeRouter.patch('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), EmployeeController.update);
-employeeRouter.patch('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), EmployeeController.update);
+employeeRouter.put('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+employeeRouter.put('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+employeeRouter.patch('/:id', validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
+employeeRouter.patch('/', validate({ body: updateEmployeeSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.update);
 
 // Delete employee
-employeeRouter.delete('/:id', validate({ params: employeeIdParamSchema }), requireOrgScope(), EmployeeController.delete);
-employeeRouter.delete('/', requireOrgScope(), EmployeeController.delete);
+employeeRouter.delete('/:id', validate({ params: employeeIdParamSchema }), requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.delete);
+employeeRouter.delete('/', requireOrgScope(), requirePermission(PERMISSION_KEYS.userWrite), EmployeeController.delete);
 
 export default employeeRouter;

@@ -60,6 +60,7 @@ export const envSchema = z.object({
   URLENCODED_BODY_LIMIT: bodyLimit('URLENCODED_BODY_LIMIT'),
   TRUST_PROXY: z.string().default('false'),
   REDIS_URL: z.url().optional(),
+  PUBLIC_DEMO_ORG_ID: z.string().trim().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

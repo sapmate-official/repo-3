@@ -65,7 +65,9 @@ export class OnboardingController {
     try {
       const rawBody = req.body as Record<string, unknown>;
       const payload = (typeof rawBody.data === 'object' && rawBody.data !== null ? rawBody.data : rawBody) as Record<string, unknown>;
-      const orgId = strParam(payload.orgId) ?? req.user?.orgId;
+      const requestedOrgId =
+        strParam(payload.orgId) ?? strParam(req.params.orgId) ?? strParam(req.query.orgId);
+      const orgId = req.user?.isSuperAdmin ? requestedOrgId : (req.user?.orgId ?? requestedOrgId);
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }

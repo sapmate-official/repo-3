@@ -117,8 +117,10 @@ export class EmployeeController {
     try {
       const rawBody = req.body as Record<string, unknown>;
       const nested = typeof rawBody.data === 'object' && rawBody.data !== null ? (rawBody.data as Record<string, unknown>) : null;
-      const bodyData = nested ? { ...nested, orgId: rawBody.orgId } : rawBody;
-      const orgId = strParam(bodyData.orgId) ?? req.user?.orgId;
+      const bodyData = nested ? { ...nested, orgId: rawBody.orgId ?? nested.orgId } : rawBody;
+      const requestedOrgId =
+        strParam(bodyData.orgId) ?? strParam(req.params.orgId) ?? strParam(req.query.orgId);
+      const orgId = req.user?.isSuperAdmin ? requestedOrgId : (req.user?.orgId ?? requestedOrgId);
       if (!orgId) {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }

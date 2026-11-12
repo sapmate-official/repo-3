@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
-import { requirePermission, requireRole } from '../../src/middleware/requirePermission.js';
+import {
+  requirePermission,
+  requireRole,
+  requireSelfOrPermission
+} from '../../src/middleware/requirePermission.js';
 
 const invoke = (
-  middleware: ReturnType<typeof requirePermission> | ReturnType<typeof requireRole>,
-  user?: unknown
+  middleware:
+    | ReturnType<typeof requirePermission>
+    | ReturnType<typeof requireRole>
+    | ReturnType<typeof requireSelfOrPermission>,
+  user?: unknown,
+  params: Record<string, string> = {}
 ) => {
-  const req = { user } as unknown as Request;
+  const req = { user, params } as unknown as Request;
   const json = vi.fn();
   const res = {
     status: vi.fn().mockReturnThis(),
@@ -66,6 +74,42 @@ describe('requirePermission', () => {
       permissions: []
     });
     expect(next).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requireSelfOrPermission', () => {
+  it('allows a user to access their own resource', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      roles: ['Employee'],
+      permissions: []
+    }, { id: 'user-1' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('allows a user with the required permission', () => {
+    const { next } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      roles: ['HR Manager'],
+      permissions: ['user_read']
+    }, { id: 'user-2' });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('rejects access to another user without permission', () => {
+    const { next, status } = invoke(requireSelfOrPermission('user_read'), {
+      id: 'user-1',
+      roles: ['Employee'],
+      permissions: ['view_personal_info_to_myself']
+    }, { id: 'user-2' });
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated requests', () => {
+    const { next, status } = invoke(requireSelfOrPermission('user_read'));
+    expect(status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
   });
 });
 

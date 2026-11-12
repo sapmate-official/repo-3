@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { authenticateAny } from '../../middleware/auth.js';
+import { requirePermission } from '../../middleware/requirePermission.js';
+import { PERMISSION_KEYS } from '../auth/permissionKeys.js';
 import { resolveOrgContext } from './roleContext.js';
 import { AppError } from '../../util/errors.js';
 import prisma from '../../db/prisma.js';
@@ -25,7 +27,7 @@ const requireScopedRole = async (roleId: string, orgId?: string): Promise<void> 
   }
 };
 
-rolePermissionRouter.post('/', async (req, res, next) => {
+rolePermissionRouter.post('/', requirePermission(PERMISSION_KEYS.roleManage), async (req, res, next) => {
   try {
     const body = req.body as RolePermissionBody;
     const roleId = body.roleId;
@@ -56,7 +58,7 @@ rolePermissionRouter.post('/', async (req, res, next) => {
   }
 });
 
-rolePermissionRouter.delete('/', async (req, res, next) => {
+rolePermissionRouter.delete('/', requirePermission(PERMISSION_KEYS.roleManage), async (req, res, next) => {
   try {
     const body = req.body as RolePermissionBody;
     const roleId = body.roleId;

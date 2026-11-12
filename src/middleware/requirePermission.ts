@@ -40,6 +40,41 @@ export const requirePermission = (
   };
 };
 
+export const requireSelfOrPermission = (
+  permissionKey: string,
+  paramName = 'id',
+  allowedRoles: string[] = ['Org_Admin']
+) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({
+        error: 'Authentication required.',
+        code: 'UNAUTHENTICATED'
+      });
+      return;
+    }
+
+    if (req.user.isSuperAdmin) {
+      next();
+      return;
+    }
+
+    const isSelf = req.params[paramName] === req.user.id;
+    const hasAllowedRole = req.user.roles.some(r => allowedRoles.includes(r));
+    const hasPermission = req.user.permissions.includes(permissionKey);
+
+    if (isSelf || hasAllowedRole || hasPermission) {
+      next();
+      return;
+    }
+
+    res.status(403).json({
+      error: `Access denied. Missing required permission: '${permissionKey}'`,
+      code: 'INSUFFICIENT_PERMISSIONS'
+    });
+  };
+};
+
 export const requireRole = (requiredRoles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

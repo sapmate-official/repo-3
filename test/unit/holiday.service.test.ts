@@ -56,7 +56,7 @@ describe('HolidayService', () => {
           type: null,
           createdAt: new Date(),
           updatedAt: new Date()
-        } as never
+        }
       ]);
 
       const result = await HolidayService.listHolidays('org-123', { year: 2026 });
@@ -67,7 +67,7 @@ describe('HolidayService', () => {
         })
       );
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('Diwali');
+      expect(result[0]?.name).toBe('Diwali');
     });
   });
 
@@ -83,7 +83,7 @@ describe('HolidayService', () => {
         type: null,
         createdAt: new Date(),
         updatedAt: new Date()
-      } as never);
+      });
 
       const holiday = await HolidayService.getHolidayById('org-123', 'h-1');
       expect(holiday.name).toBe('Christmas');
@@ -120,7 +120,7 @@ describe('HolidayService', () => {
         type: null,
         createdAt: new Date(),
         updatedAt: new Date()
-      } as never);
+      });
 
       vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
         { email: 'emp1@acme.test', firstName: 'Alice', lastName: 'Smith' },
@@ -234,9 +234,9 @@ describe('HolidayService', () => {
 
       const calendar = await HolidayService.getCalendar('org-123', 2026, 3);
       expect(calendar).toHaveLength(1);
-      expect(calendar[0].title).toBe('Holi');
-      expect(calendar[0].holidayType).toBe('Gazetted');
-      expect(calendar[0].year).toBe(2026);
+      expect(calendar[0]?.title).toBe('Holi');
+      expect(calendar[0]?.holidayType).toBe('Gazetted');
+      expect(calendar[0]?.year).toBe(2026);
     });
   });
 });
@@ -254,7 +254,7 @@ describe('HolidayTypeService', () => {
 
       const types = await HolidayTypeService.listTypes('org-123');
       expect(types).toHaveLength(1);
-      expect(types[0].name).toBe('Gazetted');
+      expect(types[0]?.name).toBe('Gazetted');
     });
   });
 

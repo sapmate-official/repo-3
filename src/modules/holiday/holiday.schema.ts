@@ -16,7 +16,7 @@ export const createHolidaySchema = z.object({
   name: z.string().trim().min(1, 'Holiday name is required').max(100),
   date: z.coerce.date(),
   description: z.string().trim().max(500).optional().nullable(),
-  isOptional: z.boolean().optional().default(false),
+  isOptional: z.boolean().optional(),
   type: z.string().trim().min(1).optional().nullable(),
   orgId: z.string().trim().min(1).optional()
 });

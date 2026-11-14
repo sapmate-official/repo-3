@@ -258,7 +258,7 @@ export class HolidayService {
         }
       });
 
-      const recipients = activeEmployees
+      const recipients = (activeEmployees ?? [])
         .filter((u: { email: string; firstName: string | null; lastName: string | null }) => typeof u.email === 'string' && u.email.trim().length > 0)
         .map((u: { email: string; firstName: string | null; lastName: string | null }) => ({
           email: u.email,

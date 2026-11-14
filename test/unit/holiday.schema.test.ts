@@ -43,13 +43,13 @@ describe('createHolidaySchema', () => {
     ).toThrow();
   });
 
-  it('defaults isOptional to false when omitted', () => {
+  it('allows isOptional to be omitted', () => {
     const parsed = createHolidaySchema.parse({
       name: 'Republic Day',
       date: '2026-01-26'
     });
 
-    expect(parsed.isOptional).toBe(false);
+    expect(parsed.isOptional).toBeUndefined();
   });
 });
 
@@ -92,7 +92,7 @@ describe('bulkCreateHolidaySchema', () => {
     });
 
     expect(parsed.holidays).toHaveLength(2);
-    expect(parsed.holidays[0].name).toBe('Holiday 1');
+    expect(parsed.holidays[0]?.name).toBe('Holiday 1');
   });
 
   it('rejects empty array', () => {

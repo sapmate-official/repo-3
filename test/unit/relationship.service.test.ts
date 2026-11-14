@@ -242,7 +242,7 @@ describe('RelationshipService', () => {
       expect(res.organizationRole.departmentName).toBe('Engineering');
       expect(res.organizationRole.subordinateCount).toBe(3);
       expect(res.organizationRole.organizationAdmins).toHaveLength(1);
-      expect(res.organizationRole.organizationAdmins[0].name).toBe('Chief Admin');
+      expect(res.organizationRole.organizationAdmins[0]?.name).toBe('Chief Admin');
       expect(res.permissions).toHaveLength(1);
     });
   });

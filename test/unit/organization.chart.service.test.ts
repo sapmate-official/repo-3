@@ -103,7 +103,7 @@ describe('OrganizationChartService', () => {
 
       // Check Grace (subordinate) is nested under Alan (manager)
       expect(headUser.children).toHaveLength(1);
-      expect(headUser.children[0].id).toBe('user-dev');
+      expect(headUser.children[0]?.id).toBe('user-dev');
     });
   });
 
@@ -179,10 +179,10 @@ describe('OrganizationChartService', () => {
       );
 
       expect(chart).toHaveLength(1);
-      expect(chart[0].id).toBe('ceo');
-      expect(chart[0].children).toHaveLength(1);
-      expect(chart[0].children[0].id).toBe('mgr-1');
-      expect(chart[0].children[0].children).toHaveLength(2);
+      expect(chart[0]?.id).toBe('ceo');
+      expect(chart[0]?.children).toHaveLength(1);
+      expect(chart[0]?.children[0]?.id).toBe('mgr-1');
+      expect(chart[0]?.children[0]?.children).toHaveLength(2);
     });
 
     it('returns scoped hierarchy around focus user for non-admin', () => {
@@ -194,13 +194,13 @@ describe('OrganizationChartService', () => {
 
       // Focus user dev-1: root of visible tree is grandparent 'ceo'
       expect(chart).toHaveLength(1);
-      expect(chart[0].id).toBe('ceo');
+      expect(chart[0]?.id).toBe('ceo');
       // CEO's children has manager 'mgr-1'
-      expect(chart[0].children).toHaveLength(1);
-      const managerNode = chart[0].children[0];
-      expect(managerNode.id).toBe('mgr-1');
+      expect(chart[0]?.children).toHaveLength(1);
+      const managerNode = chart[0]?.children[0];
+      expect(managerNode?.id).toBe('mgr-1');
       // Children of manager include dev-1 and sibling dev-2
-      expect(managerNode.children.map((c) => c.id).sort()).toEqual(['dev-1', 'dev-2']);
+      expect(managerNode?.children.map((c) => c.id).sort()).toEqual(['dev-1', 'dev-2']);
     });
   });
 

@@ -396,4 +396,68 @@ export class EmailService {
       htmlContent
     });
   }
+
+  static async sendHolidayAnnouncementEmail(params: {
+    recipients: { email: string; name?: string }[];
+    holidayName: string;
+    holidayDate: Date;
+    description?: string | null;
+    isOptional?: boolean;
+    companyName: string;
+  }): Promise<void> {
+    if (!params.recipients.length) return;
+
+    const safeCompanyName = escapeHtml(params.companyName);
+    const safeHolidayName = escapeHtml(params.holidayName);
+    const safeDescription = params.description ? escapeHtml(params.description) : '';
+    const formattedDate = params.holidayDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Holiday Announcement</h1>
+        </div>
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+          <p style="color: #636363; margin-bottom: 15px;">Dear Team,</p>
+          <p style="color: #636363; margin-bottom: 15px;">We are pleased to announce an upcoming holiday for ${safeCompanyName}:</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="border-bottom: 1px solid #ddd;">
+              <td style="padding: 8px; font-weight: bold; width: 35%;">Holiday Name</td>
+              <td style="padding: 8px;">${safeHolidayName}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+              <td style="padding: 8px; font-weight: bold;">Date</td>
+              <td style="padding: 8px;">${formattedDate}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+              <td style="padding: 8px; font-weight: bold;">Type</td>
+              <td style="padding: 8px;">${params.isOptional ? 'Optional / Floating Holiday' : 'Regular Holiday'}</td>
+            </tr>
+            ${safeDescription ? `
+            <tr style="border-bottom: 1px solid #ddd;">
+              <td style="padding: 8px; font-weight: bold;">Description</td>
+              <td style="padding: 8px;">${safeDescription}</td>
+            </tr>` : ''}
+          </table>
+          <p style="color: #636363; margin-top: 15px;">Wishing you a restful and joyful holiday!</p>
+          <p style="color: #636363; margin-top: 5px;">Best regards,<br>${safeCompanyName}</p>
+        </div>
+      </div>
+    `;
+
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < params.recipients.length; i += BATCH_SIZE) {
+      const batch = params.recipients.slice(i, i + BATCH_SIZE);
+      await this.sendEmail({
+        to: batch,
+        subject: sanitizeHeaderValue(`Holiday Announcement: ${params.holidayName} - ${params.companyName}`),
+        htmlContent
+      });
+    }
+  }
 }

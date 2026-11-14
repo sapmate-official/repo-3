@@ -19,6 +19,7 @@ import {
   leaveRequestRouter,
   leaveTypeRouter
 } from '../modules/leave/leave.router.js';
+import { holidayRouter, holidayTypeRouter } from '../modules/holiday/holiday.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -95,6 +96,12 @@ v2Router.use('/user-role', userRoleRouter);
 // Employee endpoints
 v2Router.use('/employees', employeeRouter);
 v2Router.use('/employee', employeeRouter);
+
+// Holiday endpoints
+v2Router.use('/holiday', holidayRouter);
+v2Router.use('/holidays', holidayRouter);
+v2Router.use('/holiday-type', holidayTypeRouter);
+v2Router.use('/holiday-types', holidayTypeRouter);
 
 // User profile & management endpoints (/api/v2/user/...)
 v2Router.get(

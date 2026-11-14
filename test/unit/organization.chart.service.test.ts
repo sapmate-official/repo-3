@@ -15,8 +15,8 @@ vi.mock('../../src/db/prisma.js', () => ({
 import prisma from '../../src/db/prisma.js';
 import {
   OrganizationChartService,
-  DepartmentNode,
-  UserNode
+  type DepartmentNode,
+  type UserNode
 } from '../../src/modules/organization/organization.chart.service.js';
 
 describe('OrganizationChartService', () => {

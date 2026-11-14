@@ -21,6 +21,7 @@ import {
 } from '../modules/leave/leave.router.js';
 import { holidayRouter, holidayTypeRouter } from '../modules/holiday/holiday.router.js';
 import { bankRouter } from '../modules/bank/bank.router.js';
+import { relationshipRouter } from '../modules/relationship/relationship.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -107,6 +108,10 @@ v2Router.use('/holiday-types', holidayTypeRouter);
 // Bank Details endpoints
 v2Router.use('/bank-details', bankRouter);
 v2Router.use('/bank', bankRouter);
+
+// Relationship endpoints
+v2Router.use('/relationship', relationshipRouter);
+v2Router.use('/relationships', relationshipRouter);
 
 // User profile & management endpoints (/api/v2/user/...)
 v2Router.get(

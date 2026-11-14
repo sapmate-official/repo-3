@@ -5,6 +5,7 @@ import { requireOrgScope } from '../../middleware/requireOrgScope.js';
 import { requirePermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import { OrganizationController } from './organization.controller.js';
+import { OrganizationChartController } from './organization.chart.controller.js';
 import {
   adminParamsSchema,
   createOrganizationSchema,
@@ -15,6 +16,23 @@ import {
 } from './organization.schema.js';
 
 export const organizationRouter = Router();
+
+// Organization hierarchy and charts (accessible to authenticated org members)
+organizationRouter.get(
+  '/:orgId/chart',
+  authenticateAny,
+  requireOrgScope('orgId'),
+  validate({ params: orgIdParamsSchema }),
+  OrganizationChartController.getChart
+);
+
+organizationRouter.get(
+  '/:orgId/manager-chart',
+  authenticateAny,
+  requireOrgScope('orgId'),
+  validate({ params: orgIdParamsSchema }),
+  OrganizationChartController.getManagerChart
+);
 
 // Organization CRUD is a platform-level operation, restricted to super-admins.
 organizationRouter.get(

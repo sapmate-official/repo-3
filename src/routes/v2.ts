@@ -138,6 +138,24 @@ v2Router.get(
   EmployeeController.listSubordinates
 );
 v2Router.get(
+  '/user/fetch-managers/org/:orgId',
+  authenticateAny,
+  requireOrgScope(),
+  EmployeeController.fetchManagers
+);
+v2Router.get(
+  '/user/fetch-managers/:orgId',
+  authenticateAny,
+  requireOrgScope(),
+  EmployeeController.fetchManagers
+);
+v2Router.get(
+  '/user/fetch-managers',
+  authenticateAny,
+  requireOrgScope(),
+  EmployeeController.fetchManagers
+);
+v2Router.get(
   '/user/:id/permissions',
   authenticateAny,
   requireOrgScope(),

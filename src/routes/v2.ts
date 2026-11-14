@@ -19,6 +19,9 @@ import {
   leaveRequestRouter,
   leaveTypeRouter
 } from '../modules/leave/leave.router.js';
+import { holidayRouter, holidayTypeRouter } from '../modules/holiday/holiday.router.js';
+import { bankRouter } from '../modules/bank/bank.router.js';
+import { relationshipRouter } from '../modules/relationship/relationship.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -96,6 +99,20 @@ v2Router.use('/user-role', userRoleRouter);
 v2Router.use('/employees', employeeRouter);
 v2Router.use('/employee', employeeRouter);
 
+// Holiday endpoints
+v2Router.use('/holiday', holidayRouter);
+v2Router.use('/holidays', holidayRouter);
+v2Router.use('/holiday-type', holidayTypeRouter);
+v2Router.use('/holiday-types', holidayTypeRouter);
+
+// Bank Details endpoints
+v2Router.use('/bank-details', bankRouter);
+v2Router.use('/bank', bankRouter);
+
+// Relationship endpoints
+v2Router.use('/relationship', relationshipRouter);
+v2Router.use('/relationships', relationshipRouter);
+
 // User profile & management endpoints (/api/v2/user/...)
 v2Router.get(
   '/user/user-list',
@@ -124,6 +141,24 @@ v2Router.get(
   requireOrgScope(),
   requirePermission(PERMISSION_KEYS.viewSubordinates),
   EmployeeController.listSubordinates
+);
+v2Router.get(
+  '/user/fetch-managers/org/:orgId',
+  authenticateAny,
+  requireOrgScope(),
+  EmployeeController.fetchManagers
+);
+v2Router.get(
+  '/user/fetch-managers/:orgId',
+  authenticateAny,
+  requireOrgScope(),
+  EmployeeController.fetchManagers
+);
+v2Router.get(
+  '/user/fetch-managers',
+  authenticateAny,
+  requireOrgScope(),
+  EmployeeController.fetchManagers
 );
 v2Router.get(
   '/user/:id/permissions',

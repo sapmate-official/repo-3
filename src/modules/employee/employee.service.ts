@@ -622,6 +622,30 @@ export class EmployeeService {
     });
   }
 
+  static async fetchManagers(orgId: string) {
+    const managers = await prisma.user.findMany({
+      where: {
+        orgId,
+        status: 'active'
+      },
+      include: {
+        department: true
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }]
+    });
+
+    return managers.map((m) => {
+      const { hashedPassword: _p, refreshToken: _rt, ...safeUser } = m;
+      const fullName = [m.firstName, m.lastName].filter(Boolean).join(' ');
+      return {
+        ...safeUser,
+        name: fullName ? fullName : m.email,
+        personalEmail: m.personalEmail ?? m.email,
+        businessEmail: m.businessEmail ?? null
+      };
+    });
+  }
+
   static async getEmployeePermissions(orgId: string, id: string) {
     const employee = await this.getEmployeeById(orgId, id);
     const permissions = new Map<string, unknown>();

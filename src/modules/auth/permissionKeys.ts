@@ -21,7 +21,17 @@ export const PERMISSION_KEYS = {
   leaveSubordinatesView: 'view_subordinates_leave',
   leaveAllView: 'view_all_user_leave',
   leaveBalanceView: 'view_leave_balance',
-  leaveBalanceManage: 'manage_leave_balance'
+  leaveBalanceManage: 'manage_leave_balance',
+  holidayView: 'holiday_view',
+  holidayManage: 'holiday_manage',
+  holidayCreate: 'create_holiday',
+  holidayUpdate: 'update_holiday',
+  holidayDelete: 'delete_holiday',
+  bankView: 'view_bank_all_user',
+  bankViewSubordinates: 'view_bank_subordinates',
+  bankUpdateOwn: 'update_bank_own',
+  bankUpdateAll: 'update_bank_all_user',
+  bankManage: 'manage_bank'
 } as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[keyof typeof PERMISSION_KEYS];

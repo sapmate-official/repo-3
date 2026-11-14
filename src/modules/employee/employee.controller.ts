@@ -103,6 +103,20 @@ export class EmployeeController {
     }
   }
 
+  static async fetchManagers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const orgId = strParam(req.params.orgId) ?? strParam(req.query.orgId) ?? strParam(req.headers['x-org-id']) ?? req.user?.orgId ?? '';
+      if (!orgId && !req.user?.isSuperAdmin) {
+        throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
+      }
+
+      const managers = await EmployeeService.fetchManagers(orgId);
+      res.status(200).json(managers);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getPermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const orgId = strParam(req.params.orgId) ?? strParam(req.query.orgId) ?? req.user?.orgId ?? '';
@@ -142,7 +156,10 @@ export class EmployeeController {
 
       const id = strParam(req.params.id) ?? '';
       const employee = await EmployeeService.getEmployeeById(orgId, id);
-      res.status(200).json(employee);
+      res.status(200).json({
+        ...employee,
+        user: employee
+      });
     } catch (error) {
       next(error);
     }

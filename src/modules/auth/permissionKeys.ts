@@ -26,7 +26,12 @@ export const PERMISSION_KEYS = {
   holidayManage: 'holiday_manage',
   holidayCreate: 'create_holiday',
   holidayUpdate: 'update_holiday',
-  holidayDelete: 'delete_holiday'
+  holidayDelete: 'delete_holiday',
+  bankView: 'view_bank_all_user',
+  bankViewSubordinates: 'view_bank_subordinates',
+  bankUpdateOwn: 'update_bank_own',
+  bankUpdateAll: 'update_bank_all_user',
+  bankManage: 'manage_bank'
 } as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[keyof typeof PERMISSION_KEYS];

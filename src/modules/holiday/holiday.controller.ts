@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 import { HolidayService, HolidayTypeService } from './holiday.service.js';
 import type {
@@ -33,8 +34,32 @@ export class HolidayController {
     try {
       const orgId = getOrgId(req);
       const { id } = req.params as { id: string };
-      const holiday = await HolidayService.getHolidayById(orgId, id);
-      res.status(200).json(holiday);
+
+      // Legacy compatibility: if :id equals orgId, return holiday list
+      if (id === orgId) {
+        const query = req.query as unknown as ListHolidaysQuery;
+        const holidays = await HolidayService.listHolidays(orgId, query);
+        res.status(200).json(holidays);
+        return;
+      }
+
+      try {
+        const holiday = await HolidayService.getHolidayById(orgId, id);
+        res.status(200).json(holiday);
+        return;
+      } catch (err) {
+        const org = await prisma.organization.findUnique({
+          where: { id },
+          select: { id: true }
+        });
+        if (org) {
+          const query = req.query as unknown as ListHolidaysQuery;
+          const holidays = await HolidayService.listHolidays(id, query);
+          res.status(200).json(holidays);
+          return;
+        }
+        throw err;
+      }
     } catch (error) {
       next(error);
     }
@@ -140,11 +165,41 @@ export class HolidayTypeController {
     try {
       const orgId = getOrgId(req);
       const { id } = req.params as { id: string };
-      const type = await HolidayTypeService.getTypeById(orgId, id);
-      res.status(200).json({
-        success: true,
-        data: type
-      });
+
+      // Legacy compatibility: if :id equals orgId, return all holiday types
+      if (id === orgId) {
+        const types = await HolidayTypeService.listTypes(orgId);
+        res.status(200).json({
+          success: true,
+          count: types.length,
+          data: types
+        });
+        return;
+      }
+
+      try {
+        const type = await HolidayTypeService.getTypeById(orgId, id);
+        res.status(200).json({
+          success: true,
+          data: type
+        });
+        return;
+      } catch (err) {
+        const org = await prisma.organization.findUnique({
+          where: { id },
+          select: { id: true }
+        });
+        if (org) {
+          const types = await HolidayTypeService.listTypes(id);
+          res.status(200).json({
+            success: true,
+            count: types.length,
+            data: types
+          });
+          return;
+        }
+        throw err;
+      }
     } catch (error) {
       next(error);
     }

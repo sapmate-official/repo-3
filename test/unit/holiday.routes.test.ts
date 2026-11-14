@@ -94,6 +94,33 @@ describe('Holiday & HolidayType Route Authorization & Dispatch', () => {
       expect(res.body.error).toContain('Missing one of required permissions');
     });
 
+    it('allows access with holiday_view permission via /api/v2/holiday/:orgId legacy format', async () => {
+      const viewerUser = makeUser('user-2', 'org-a', [
+        { name: 'Employee', permissions: [PERMISSION_KEYS.holidayView] }
+      ]);
+      vi.mocked(prismaMock.user.findUnique).mockResolvedValue(viewerUser);
+      vi.mocked(prismaMock.holiday.findMany).mockResolvedValue([
+        {
+          id: 'h-1',
+          orgId: 'org-a',
+          name: 'Independence Day',
+          date: new Date('2026-08-15'),
+          description: null,
+          isOptional: false,
+          holidayType: null
+        } as never
+      ]);
+
+      const res = await request(app)
+        .get('/api/v2/holiday/org-a')
+        .set('Authorization', authHeader(viewerUser));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([
+        expect.objectContaining({ id: 'h-1', name: 'Independence Day' })
+      ]);
+    });
+
     it('allows access with holiday_view permission', async () => {
       const viewerUser = makeUser('user-2', 'org-a', [
         { name: 'Employee', permissions: [PERMISSION_KEYS.holidayView] }
@@ -208,6 +235,25 @@ describe('Holiday & HolidayType Route Authorization & Dispatch', () => {
   });
 
   describe('Holiday Type Routing', () => {
+    it('lists holiday types for tenant with /api/v2/holiday-type/:orgId legacy format', async () => {
+      const adminUser = makeUser('admin-1', 'org-a', [{ name: 'Org_Admin' }]);
+      vi.mocked(prismaMock.user.findUnique).mockResolvedValue(adminUser);
+      vi.mocked(prismaMock.holidayType.findMany).mockResolvedValue([
+        { id: 'ht-1', orgId: 'org-a', name: 'Gazetted', policy: null, _count: { Holiday: 2 } } as never
+      ]);
+
+      const res = await request(app)
+        .get('/api/v2/holiday-type/org-a')
+        .set('Authorization', authHeader(adminUser));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        success: true,
+        count: 1,
+        data: [{ id: 'ht-1', name: 'Gazetted' }]
+      });
+    });
+
     it('lists holiday types for tenant with /api/v2/holiday-type', async () => {
       const adminUser = makeUser('admin-1', 'org-a', [{ name: 'Org_Admin' }]);
       vi.mocked(prismaMock.user.findUnique).mockResolvedValue(adminUser);

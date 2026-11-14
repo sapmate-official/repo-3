@@ -72,6 +72,10 @@ describe('BankService', () => {
     updatedAt: new Date(),
     verificationToken: null,
     verificationTokenExpiry: null,
+    annualPackage: null,
+    monthlySalary: null,
+    twoFactorEnabled: false,
+    loginNotificationsEnabled: false,
     ...overrides
   });
 

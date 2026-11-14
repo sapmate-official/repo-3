@@ -142,7 +142,10 @@ export class EmployeeController {
 
       const id = strParam(req.params.id) ?? '';
       const employee = await EmployeeService.getEmployeeById(orgId, id);
-      res.status(200).json(employee);
+      res.status(200).json({
+        ...employee,
+        user: employee
+      });
     } catch (error) {
       next(error);
     }

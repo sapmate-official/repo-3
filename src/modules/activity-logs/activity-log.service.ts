@@ -14,7 +14,7 @@ const resolveName = (firstName?: string | null, lastName?: string | null, fallba
 };
 
 // Check if user has permission or Org_Admin role
-async function checkUserActivityScope(userId: string, orgId: string) {
+async function checkUserActivityScope(userId: string, _orgId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -66,8 +66,8 @@ async function checkUserActivityScope(userId: string, orgId: string) {
 export const ActivityService = {
   async list(orgId: string, currentUser: RequestingUser, query: ActivityLogQueryInput) {
     const {
-      page = 1,
-      limit = 50,
+      page,
+      limit,
       userId,
       actorId,
       targetUserId,
@@ -103,12 +103,12 @@ export const ActivityService = {
     }
 
     // Additional query filters
-    const filterActor = actorId || userId;
+    const filterActor = actorId ?? userId;
     if (filterActor) {
       andConditions.push({ actorId: filterActor });
     }
 
-    const filterTarget = targetId || targetUserId;
+    const filterTarget = targetId ?? targetUserId;
     if (filterTarget) {
       andConditions.push({ targetId: filterTarget });
     }
@@ -283,9 +283,9 @@ export const ActivityService = {
       const u = topUsers.find((user) => user.id === group.actorId);
       return {
         userId: group.actorId,
-        name: resolveName(u?.firstName, u?.lastName, u?.email || 'Unknown'),
-        email: u?.email || '',
-        employeeId: u?.employeeId || '',
+        name: resolveName(u?.firstName, u?.lastName, u?.email ?? 'Unknown'),
+        email: u?.email ?? '',
+        employeeId: u?.employeeId ?? '',
         activityCount: group._count.actorId
       };
     });

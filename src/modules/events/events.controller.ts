@@ -59,8 +59,9 @@ export class EventController {
         const daysToEvent = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (daysToEvent >= 0 && daysToEvent <= 14) {
-          const fullName = `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim() || employee.email;
-          const firstName = employee.firstName || fullName;
+          const fullNameRaw = `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim();
+          const fullName = fullNameRaw.length > 0 ? fullNameRaw : employee.email;
+          const firstName = employee.firstName ?? fullName;
 
           events.push({
             type: 'BIRTHDAY',
@@ -73,7 +74,7 @@ export class EventController {
             entity: {
               id: employee.id,
               name: fullName,
-              department: employee.department?.name || 'Unassigned'
+              department: employee.department?.name ?? 'Unassigned'
             }
           });
         }

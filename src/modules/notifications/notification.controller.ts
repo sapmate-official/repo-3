@@ -11,32 +11,56 @@ const strParam = (val: unknown): string | undefined => {
   return typeof val === 'string' && val.trim() ? val.trim() : undefined;
 };
 
-const formatNotification = (n: any) => ({
-  id: n.id,
-  title: n.template?.subject || n.template?.name || (n.metadata as any)?.title || 'Notification',
-  message: n.content,
-  type: (n.metadata as any)?.type || 'INFO',
-  category: (n.metadata as any)?.category || 'GENERAL',
-  priority: (n.metadata as any)?.priority || 'MEDIUM',
-  recipientId: n.userId,
-  organizationId: n.template?.orgId || n.user?.orgId,
-  isRead: n.isRead,
-  readAt: n.readAt,
-  actionUrl: (n.metadata as any)?.actionUrl,
-  actionText: (n.metadata as any)?.actionText,
-  metadata: n.metadata,
-  createdAt: n.createdAt,
-  updatedAt: n.createdAt,
-  recipient: n.user
-    ? {
-        id: n.user.id,
-        firstName: n.user.firstName,
-        lastName: n.user.lastName,
-        email: n.user.email
-      }
-    : undefined,
-  template: n.template
-});
+type NotificationWithIncludes = Prisma.NotificationGetPayload<{
+  include: {
+    template: true;
+    user: { select: { id: true; firstName: true; lastName: true; email: true; orgId: true } };
+  };
+}>;
+
+function getMetaString(meta: Prisma.JsonValue | null | undefined, key: string): string | undefined {
+  if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
+    const val = (meta as Record<string, unknown>)[key];
+    return typeof val === 'string' ? val : undefined;
+  }
+  return undefined;
+}
+
+const formatNotification = (n: NotificationWithIncludes) => {
+  const metaTitle = getMetaString(n.metadata, 'title');
+  const metaType = getMetaString(n.metadata, 'type');
+  const metaCategory = getMetaString(n.metadata, 'category');
+  const metaPriority = getMetaString(n.metadata, 'priority');
+  const metaActionUrl = getMetaString(n.metadata, 'actionUrl');
+  const metaActionText = getMetaString(n.metadata, 'actionText');
+
+  return {
+    id: n.id,
+    title: n.template?.subject ?? n.template?.name ?? metaTitle ?? 'Notification',
+    message: n.content,
+    type: metaType ?? 'INFO',
+    category: metaCategory ?? 'GENERAL',
+    priority: metaPriority ?? 'MEDIUM',
+    recipientId: n.userId,
+    organizationId: n.template?.orgId ?? n.user?.orgId,
+    isRead: n.isRead,
+    readAt: n.readAt,
+    actionUrl: metaActionUrl,
+    actionText: metaActionText,
+    metadata: n.metadata,
+    createdAt: n.createdAt,
+    updatedAt: n.createdAt,
+    recipient: n.user
+      ? {
+          id: n.user.id,
+          firstName: n.user.firstName,
+          lastName: n.user.lastName,
+          email: n.user.email
+        }
+      : undefined,
+    template: n.template
+  };
+};
 
 async function getOrCreateDefaultTemplate(orgId: string): Promise<string> {
   const existing = await prisma.notificationTemplate.findFirst({
@@ -65,15 +89,18 @@ export class NotificationController {
         throw new AppError('User authentication required', 401, 'UNAUTHORIZED');
       }
 
-      const { unreadOnly, page = '1', limit = '50' } = req.query as Record<string, string>;
+      const { unreadOnly, page = '1', limit = '50' } = req.query as Record<string, string | undefined>;
 
       const where: Prisma.NotificationWhereInput = { userId };
       if (unreadOnly === 'true') {
         where.isRead = false;
       }
 
-      const take = Math.min(parseInt(limit) || 50, 100);
-      const skip = ((parseInt(page) || 1) - 1) * take;
+      const limitNum = parseInt(limit ?? '50', 10);
+      const pageNum = parseInt(page ?? '1', 10);
+      const take = Math.min(Number.isNaN(limitNum) ? 50 : limitNum, 100);
+      const validPage = Number.isNaN(pageNum) || pageNum < 1 ? 1 : pageNum;
+      const skip = (validPage - 1) * take;
 
       const [notifications, total] = await Promise.all([
         prisma.notification.findMany({
@@ -95,10 +122,10 @@ export class NotificationController {
         success: true,
         data: formatted,
         pagination: {
-          page: parseInt(page) || 1,
+          page: validPage,
           limit: take,
           total,
-          totalPages: Math.ceil(total / take) || 1
+          totalPages: Math.max(1, Math.ceil(total / take))
         }
       });
     } catch (error) {
@@ -109,7 +136,7 @@ export class NotificationController {
   // GET /api/v2/notification/stats
   static async stats(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = strParam(req.query.userId) || req.user?.id;
+      const userId = strParam(req.query.userId) ?? req.user?.id;
       if (!userId) {
         throw new AppError('User authentication required', 401, 'UNAUTHORIZED');
       }
@@ -164,12 +191,12 @@ export class NotificationController {
   // GET /api/v2/notification/user/:userId
   static async listByUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const targetUserId = strParam(req.params.userId) || req.user?.id;
+      const targetUserId = strParam(req.params.userId) ?? req.user?.id;
       if (!targetUserId) {
         throw new AppError('User ID is required', 400, 'BAD_REQUEST');
       }
 
-      const { unreadOnly } = req.query as Record<string, string>;
+      const { unreadOnly } = req.query as Record<string, string | undefined>;
 
       const where: Prisma.NotificationWhereInput = { userId: targetUserId };
       if (unreadOnly === 'true') {
@@ -199,27 +226,34 @@ export class NotificationController {
   static async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const orgId = req.user?.orgId;
-      if (!orgId) {
+      const callerId = req.user?.id;
+      if (!orgId || !callerId) {
         throw new AppError('Organization context required', 401, 'ORG_CONTEXT_MISSING');
       }
 
-      const {
-        userId,
-        recipientIds,
-        templateId,
-        content,
-        message,
-        title,
-        metadata
-      } = req.body;
+      const body = req.body as Record<string, unknown>;
+      const recipientIds = Array.isArray(body.recipientIds)
+        ? (body.recipientIds as unknown[]).filter((x): x is string => typeof x === 'string')
+        : undefined;
+      const singleUserId = typeof body.userId === 'string' ? body.userId : undefined;
+      const targetUsers: string[] = recipientIds ?? (singleUserId ? [singleUserId] : [callerId]);
 
-      const targetUsers: string[] = recipientIds || (userId ? [userId] : [req.user!.id]);
-      const bodyContent = content || message || title || 'Notification alert';
-      const effectiveTemplateId = templateId || (await getOrCreateDefaultTemplate(orgId));
+      const content = typeof body.content === 'string' ? body.content : undefined;
+      const message = typeof body.message === 'string' ? body.message : undefined;
+      const title = typeof body.title === 'string' ? body.title : undefined;
+      const bodyContent = content ?? message ?? title ?? 'Notification alert';
 
-      const mergedMeta = {
-        title: title || 'Notification',
-        ...(typeof metadata === 'object' && metadata !== null ? metadata : {})
+      const templateId = typeof body.templateId === 'string' ? body.templateId : undefined;
+      const effectiveTemplateId = templateId ?? (await getOrCreateDefaultTemplate(orgId));
+
+      const inputMeta =
+        typeof body.metadata === 'object' && body.metadata !== null && !Array.isArray(body.metadata)
+          ? (body.metadata as Record<string, unknown>)
+          : {};
+
+      const mergedMeta: Prisma.InputJsonValue = {
+        title: title ?? 'Notification',
+        ...inputMeta
       };
 
       const created = await Promise.all(
@@ -311,13 +345,19 @@ export class NotificationController {
   // POST /api/v2/notification/read & PATCH /api/v2/notification/bulk-mark
   static async bulkMarkRead(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { notificationIds, isRead = true, allUnread } = req.body;
+      const body = req.body as Record<string, unknown>;
+      const notificationIds = Array.isArray(body.notificationIds)
+        ? (body.notificationIds as unknown[]).filter((x): x is string => typeof x === 'string')
+        : undefined;
+      const isRead = typeof body.isRead === 'boolean' ? body.isRead : true;
+      const allUnread = body.allUnread === true;
+
       const userId = req.user?.id;
       if (!userId) {
         throw new AppError('User authentication required', 401, 'UNAUTHORIZED');
       }
 
-      if (allUnread === true) {
+      if (allUnread) {
         const result = await prisma.notification.updateMany({
           where: { userId, isRead: false },
           data: { isRead: true, readAt: new Date() }
@@ -326,7 +366,7 @@ export class NotificationController {
         return;
       }
 
-      if (Array.isArray(notificationIds) && notificationIds.length > 0) {
+      if (notificationIds && notificationIds.length > 0) {
         const result = await prisma.notification.updateMany({
           where: { userId, id: { in: notificationIds } },
           data: { isRead, readAt: isRead ? new Date() : null }
@@ -344,7 +384,7 @@ export class NotificationController {
   // PATCH /api/v2/notification/user/:userId/mark-all-read
   static async markAllUserRead(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const targetUserId = strParam(req.params.userId) || req.user?.id;
+      const targetUserId = strParam(req.params.userId) ?? req.user?.id;
       if (!targetUserId) {
         throw new AppError('User ID is required', 400, 'BAD_REQUEST');
       }
@@ -403,16 +443,24 @@ export class NotificationController {
         throw new AppError('Organization context required', 401, 'ORG_CONTEXT_MISSING');
       }
 
-      const { name, type = 'IN_APP', subject, content, variables } = req.body;
+      const body = req.body as Record<string, unknown>;
+      const name = typeof body.name === 'string' ? body.name : '';
+      const type = typeof body.type === 'string' ? body.type : 'IN_APP';
+      const subject = typeof body.subject === 'string' ? body.subject : undefined;
+      const content = typeof body.content === 'string' ? body.content : undefined;
+      const variables =
+        typeof body.variables === 'object' && body.variables !== null
+          ? (body.variables as Prisma.InputJsonValue)
+          : {};
 
       const template = await prisma.notificationTemplate.create({
         data: {
           orgId,
           name,
           type,
-          subject: subject || name,
-          content: content || name,
-          variables: variables || {}
+          subject: subject ?? name,
+          content: content ?? name,
+          variables
         }
       });
 

@@ -11,13 +11,14 @@ import { AppError } from '../../util/errors.js';
 export class ActivityLogController {
   static async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = req.user?.orgId;
-      if (!orgId) {
+      const user = req.user;
+      if (!user?.orgId) {
         throw new AppError('Organization context required', 401, 'ORG_CONTEXT_MISSING');
       }
+      const orgId = user.orgId;
 
       const query = activityLogQuerySchema.parse(req.query);
-      const result = await ActivityService.list(orgId, req.user!, query);
+      const result = await ActivityService.list(orgId, user, query);
 
       res.status(200).json({
         success: true,
@@ -31,13 +32,14 @@ export class ActivityLogController {
 
   static async getStats(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = req.user?.orgId;
-      if (!orgId) {
+      const user = req.user;
+      if (!user?.orgId) {
         throw new AppError('Organization context required', 401, 'ORG_CONTEXT_MISSING');
       }
+      const orgId = user.orgId;
 
       const query = activityStatsQuerySchema.parse(req.query);
-      const stats = await ActivityService.getStats(orgId, req.user!, query.period);
+      const stats = await ActivityService.getStats(orgId, user, query.period);
 
       res.status(200).json({
         success: true,
@@ -50,17 +52,18 @@ export class ActivityLogController {
 
   static async getRecentByUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const orgId = req.user?.orgId;
-      if (!orgId) {
+      const user = req.user;
+      if (!user?.orgId) {
         throw new AppError('Organization context required', 401, 'ORG_CONTEXT_MISSING');
       }
+      const orgId = user.orgId;
 
       const params = userRecentParamsSchema.parse(req.params);
       const query = userRecentQuerySchema.parse(req.query);
 
       const data = await ActivityService.getRecentByUser(
         orgId,
-        req.user!,
+        user,
         params.targetUserId,
         query.limit
       );

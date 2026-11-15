@@ -38,6 +38,6 @@ activityLogRouter.get(
     if (typeof req.params.userId === 'string') {
       req.params.targetUserId = req.params.userId;
     }
-    ActivityLogController.getRecentByUser(req, res, next);
+    void ActivityLogController.getRecentByUser(req, res, next);
   }
 );

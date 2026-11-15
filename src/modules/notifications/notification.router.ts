@@ -19,7 +19,7 @@ notificationRouter.patch('/user/:userId/mark-all-read', NotificationController.m
 // User-scoped notifications
 notificationRouter.get('/user/:userId/unread', (req, res, next) => {
   req.query.unreadOnly = 'true';
-  NotificationController.listByUser(req, res, next);
+  void NotificationController.listByUser(req, res, next);
 });
 notificationRouter.get('/user/:userId', NotificationController.listByUser);
 

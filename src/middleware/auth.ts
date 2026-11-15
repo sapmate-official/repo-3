@@ -71,6 +71,8 @@ const extractToken = (req: Request, allowSuperAdminCookie = false): string | und
 const respondAuthError = (error: unknown, res: Response): boolean => {
   if (error instanceof jwt.TokenExpiredError) {
     res.status(401).json({
+      success: false,
+      message: 'Session expired. Please log in again.',
       error: 'Session expired. Please log in again.',
       code: 'TOKEN_EXPIRED'
     });
@@ -79,6 +81,8 @@ const respondAuthError = (error: unknown, res: Response): boolean => {
 
   if (error instanceof TokenTypeError) {
     res.status(401).json({
+      success: false,
+      message: 'Invalid token type.',
       error: 'Invalid token type.',
       code: 'INVALID_TOKEN_TYPE'
     });
@@ -87,6 +91,8 @@ const respondAuthError = (error: unknown, res: Response): boolean => {
 
   if (error instanceof jwt.JsonWebTokenError) {
     res.status(401).json({
+      success: false,
+      message: 'Invalid authentication token.',
       error: 'Invalid authentication token.',
       code: 'TOKEN_INVALID'
     });
@@ -206,6 +212,8 @@ export const authenticateUser = async (
   const token = extractToken(req);
   if (!token) {
     res.status(401).json({
+      success: false,
+      message: 'Authentication required. No token provided.',
       error: 'Authentication required. No token provided.',
       code: 'TOKEN_MISSING'
     });
@@ -233,6 +241,8 @@ export const authenticateAny = async (
   const token = extractToken(req, true);
   if (!token) {
     res.status(401).json({
+      success: false,
+      message: 'Authentication required. No token provided.',
       error: 'Authentication required. No token provided.',
       code: 'TOKEN_MISSING'
     });

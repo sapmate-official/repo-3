@@ -36,6 +36,7 @@ payrollRouter.get('/download/:salaryRecordId', PayrollCompatController.downloadP
 payrollRouter.get('/download/:id', PayrollCompatController.downloadPayslip);
 payrollRouter.get('/pre-stats/:month/:year/:userId', PayrollCompatController.preStatsSalaryGeneration);
 payrollRouter.get('/pre-stats/:month/:year', PayrollCompatController.preStatsSalaryGeneration);
+payrollRouter.delete('/payslip/:id', PayrollCompatController.deleteRecord);
 
 // ==========================================
 // Compatibility Router for Legacy v2 /api/v2/payroll
@@ -43,10 +44,16 @@ payrollRouter.get('/pre-stats/:month/:year', PayrollCompatController.preStatsSal
 export const payrollV2Router = Router();
 
 payrollV2Router.use(authenticateAny, requireOrgScope());
+payrollV2Router.get('/user/:userId', PayrollCompatController.getUserPayroll);
+payrollV2Router.get('/statistics/:userId', PayrollCompatController.getUserPayrollStats);
 payrollV2Router.get('/parameters/:userId', PayrollCompatController.getParameters);
 payrollV2Router.put('/parameters/:userId', PayrollCompatController.updateParameters);
+payrollV2Router.post('/parameters/:userId', PayrollCompatController.updateParameters);
 payrollV2Router.get('/parameters', PayrollCompatController.getParameters);
 payrollV2Router.put('/parameters', PayrollCompatController.updateParameters);
+payrollV2Router.post('/parameters', PayrollCompatController.updateParameters);
+payrollV2Router.delete('/:id', PayrollCompatController.deleteRecord);
+payrollV2Router.post('/generate', PayrollCompatController.generateSalary);
 
 // ==========================================
 // Compatibility Router for Legacy v2 /api/v2/salary
@@ -55,5 +62,7 @@ export const salaryV2Router = Router();
 
 salaryV2Router.use(authenticateAny, requireOrgScope());
 salaryV2Router.get('/user/:userId/monthly/:month/year/:year', PayrollCompatController.checkSalaryExistence);
+salaryV2Router.get('/user/:userId', PayrollCompatController.getUserPayroll);
+salaryV2Router.delete('/:id', PayrollCompatController.deleteRecord);
 
 export default payrollRouter;

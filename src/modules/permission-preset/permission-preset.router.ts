@@ -8,6 +8,7 @@ export const permissionPresetRouter = Router();
 // Apply auth & org context across preset endpoints
 permissionPresetRouter.use(authenticateAny, requireOrgScope());
 
+permissionPresetRouter.get('/', PermissionPresetController.getPresets);
 permissionPresetRouter.get('/org/:orgId', PermissionPresetController.getPresets);
 permissionPresetRouter.get('/:id', PermissionPresetController.getPresetById);
 permissionPresetRouter.post('/', PermissionPresetController.createPreset);

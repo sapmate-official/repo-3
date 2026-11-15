@@ -839,4 +839,110 @@ export class PayrollCompatController {
       next(error);
     }
   }
+
+  // GET /api/v2/payroll/user/:userId
+  static async getUserPayroll(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const rawUserId = strParam(req.params.userId);
+      const targetUserId = rawUserId && rawUserId !== 'undefined' ? rawUserId : req.user?.id;
+      if (!targetUserId) {
+        throw new AppError('User ID is required', 400, 'BAD_REQUEST');
+      }
+
+      const payslips = await prisma.payslipRecord.findMany({
+        where: { employeeId: targetUserId },
+        include: { run: true, lineItems: true },
+        orderBy: [{ run: { year: 'desc' } }, { run: { month: 'desc' } }]
+      });
+
+      if (payslips.length > 0) {
+        const formatted = payslips.map((p) => ({
+          id: p.id,
+          userId: p.employeeId,
+          month: p.run.month,
+          year: p.run.year,
+          basicSalary: p.grossEarnings,
+          netSalary: p.netPay,
+          status: p.run.status,
+          processedAt: p.run.disbursedAt?.toISOString() ?? null,
+          createdAt: p.createdAt.toISOString()
+        }));
+        res.status(200).json({ success: true, count: formatted.length, data: formatted });
+        return;
+      }
+
+      const legacy = await prisma.salaryRecord.findMany({
+        where: { userId: targetUserId },
+        orderBy: [{ year: 'desc' }, { month: 'desc' }]
+      });
+
+      res.status(200).json({ success: true, count: legacy.length, data: legacy });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // DELETE /api/v2/payroll/:id & /api/v2/salary/:id
+  static async deleteRecord(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = strParam(req.params.id);
+      if (!id) throw new AppError('Record ID required', 400, 'BAD_REQUEST');
+
+      const existingPayslip = await prisma.payslipRecord.findUnique({ where: { id } });
+      if (existingPayslip) {
+        await prisma.payslipLineItem.deleteMany({ where: { payslipId: id } });
+        await prisma.payslipRecord.delete({ where: { id } });
+        res.status(200).json({ success: true, message: 'Payslip record deleted successfully' });
+        return;
+      }
+
+      const existingSalary = await prisma.salaryRecord.findUnique({ where: { id } });
+      if (existingSalary) {
+        await prisma.salaryRecord.delete({ where: { id } });
+        res.status(200).json({ success: true, message: 'Salary record deleted successfully' });
+        return;
+      }
+
+      throw new AppError('Record not found', 404, 'NOT_FOUND');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // GET /api/v2/payroll/statistics/:userId
+  static async getUserPayrollStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const rawUserId = strParam(req.params.userId);
+      const targetUserId = rawUserId && rawUserId !== 'undefined' ? rawUserId : req.user?.id;
+      if (!targetUserId) throw new AppError('User ID required', 400, 'BAD_REQUEST');
+
+      const payslips = await prisma.payslipRecord.findMany({
+        where: { employeeId: targetUserId },
+        include: { run: true }
+      });
+
+      const totalEarned = payslips.reduce((sum, p) => sum + p.netPay, 0);
+      const totalAttendance = payslips.reduce((sum, p) => sum + p.presentDays, 0);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          monthlySalaries: payslips.map((p) => ({
+            id: p.id,
+            month: p.run.month,
+            year: p.run.year,
+            netSalary: p.netPay,
+            status: p.run.status
+          })),
+          summary: {
+            totalEarned,
+            totalAttendance,
+            totalMonths: payslips.length
+          }
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

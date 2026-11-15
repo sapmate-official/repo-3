@@ -9,6 +9,8 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { v1Router } from './routes/v1.js';
 import { v2Router } from './routes/v2.js';
 import { v3Router } from './routes/v3.js';
+import { publicRouter } from './modules/public/public.router.js';
+import { BillingController } from './modules/billing/billing.controller.js';
 import { AppError } from './util/errors.js';
 
 const trustProxyValue = (): boolean | number | string => {
@@ -59,13 +61,13 @@ export const createApp = (): Express => {
     })
   );
 
-  // 3. Body Parsing & Cookies
+  // 3. Request ID & Tracing
+  app.use(requestIdMiddleware);
+
+  // 4. Body Parsing & Cookies
   app.use(express.json({ limit: env.JSON_BODY_LIMIT }));
   app.use(express.urlencoded({ extended: true, limit: env.URLENCODED_BODY_LIMIT }));
   app.use(cookieParser());
-
-  // 4. Request ID & Tracing
-  app.use(requestIdMiddleware);
 
   // 5. Health Check endpoint
   app.get('/health', (_req: Request, res: Response) => {
@@ -77,12 +79,17 @@ export const createApp = (): Express => {
     });
   });
 
-  // 6. API Routes (state-changing requests must come from a trusted origin)
+  // 6. Public endpoints (no auth required)
+  app.get('/api/public/billing/:id', BillingController.getPublicBill);
+  app.post('/api/public/billing/:id/payment', BillingController.payPublicBill);
+  app.use('/api/public', publicRouter);
+
+  // 7. API Routes (state-changing requests must come from a trusted origin)
   app.use('/api/v1', requireTrustedOrigin, v1Router);
   app.use('/api/v2', requireTrustedOrigin, v2Router);
   app.use('/api/v3', requireTrustedOrigin, v3Router);
 
-  // 7. Central Error Handler (registered last)
+  // 8. Central Error Handler (registered last)
   app.use(errorHandler);
 
   return app;

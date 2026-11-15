@@ -8,6 +8,8 @@ export const settingsRouter = Router();
 // Apply auth & org context
 settingsRouter.use(authenticateAny, requireOrgScope());
 
+settingsRouter.get('/', SettingsController.fetchSettings);
+settingsRouter.put('/', SettingsController.updateSettings);
 settingsRouter.get('/:orgId', SettingsController.fetchSettings);
 settingsRouter.put('/:orgId', SettingsController.updateSettings);
 settingsRouter.post('/reset/:orgId', SettingsController.resetSettings);

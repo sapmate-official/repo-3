@@ -287,6 +287,79 @@ export class BillingController {
     }
   }
 
+  // GET /api/public/billing/:id
+  static async getPublicBill(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const billId = strParam(req.params.id);
+      if (!billId) throw new AppError('Bill ID required', 400, 'BAD_REQUEST');
+
+      const bill = await prisma.billingRecord.findUnique({
+        where: { id: billId },
+        include: {
+          organization: {
+            select: {
+              name: true,
+              logo: true,
+              subscriptionPlanId: true,
+              subscriptionPlan: { select: { name: true } }
+            }
+          }
+        }
+      });
+
+      if (!bill) throw new AppError('Bill not found', 404, 'NOT_FOUND');
+
+      const { organization, ...billFields } = bill;
+      const formatted = {
+        ...billFields,
+        organizationName: organization.name,
+        organizationLogo: organization.logo,
+        subscriptionPlan: organization.subscriptionPlan?.name ?? 'No Plan',
+        monthName: new Date(bill.year, bill.month - 1).toLocaleString('default', { month: 'long' })
+      };
+
+      res.status(200).json({ success: true, data: formatted, ...formatted });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /api/public/billing/:id/payment
+  static async payPublicBill(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const billId = strParam(req.params.id);
+      if (!billId) throw new AppError('Bill ID required', 400, 'BAD_REQUEST');
+
+      const body = req.body as { paymentMethod?: string; paymentReference?: string };
+      const paymentMethod = typeof body?.paymentMethod === 'string' ? body.paymentMethod : 'ONLINE';
+      const paymentReference =
+        typeof body?.paymentReference === 'string'
+          ? body.paymentReference
+          : `PUB-${paymentMethod}-${Date.now()}`;
+
+      const bill = await prisma.billingRecord.findUnique({ where: { id: billId } });
+      if (!bill) throw new AppError('Bill not found', 404, 'NOT_FOUND');
+      if (bill.status === 'PAID') throw new AppError('Bill is already paid', 400, 'ALREADY_PAID');
+
+      const updated = await prisma.billingRecord.update({
+        where: { id: billId },
+        data: {
+          status: 'PAID',
+          paidDate: new Date(),
+          paymentReference
+        }
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Bill payment recorded successfully',
+        data: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // GET /api/v2/billing/bill/:id/invoice
   static async downloadBillInvoice(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -324,10 +397,10 @@ export class BillingController {
         orgAddress: bill.organization.address,
         monthName,
         year: bill.year,
-        issueDate: bill.billDate.toISOString().slice(0, 10),
-        dueDate: bill.dueDate.toISOString().slice(0, 10),
+        issueDate: (bill.billDate instanceof Date ? bill.billDate : new Date()).toISOString().slice(0, 10),
+        dueDate: (bill.dueDate instanceof Date ? bill.dueDate : new Date()).toISOString().slice(0, 10),
         status: bill.status,
-        paidDate: bill.paidDate ? bill.paidDate.toISOString().slice(0, 10) : null,
+        paidDate: bill.paidDate instanceof Date ? bill.paidDate.toISOString().slice(0, 10) : null,
         paymentReference: bill.paymentReference,
         planName: bill.organization.subscriptionPlan?.name ?? 'Standard',
         activeUsers: bill.activeUserCount,

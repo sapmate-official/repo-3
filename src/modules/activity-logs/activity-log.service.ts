@@ -181,13 +181,15 @@ export const ActivityService = {
       createdAt: log.createdAt,
       ipAddress: log.ipAddress,
       userAgent: log.userAgent,
-      actor: {
-        id: log.actor.id,
-        name: resolveName(log.actor.firstName, log.actor.lastName, log.actor.email),
-        email: log.actor.email,
-        employeeId: log.actor.employeeId,
-        department: log.actor.department?.name
-      },
+      actor: log.actor
+        ? {
+            id: log.actor.id,
+            name: resolveName(log.actor.firstName, log.actor.lastName, log.actor.email),
+            email: log.actor.email,
+            employeeId: log.actor.employeeId,
+            department: log.actor.department?.name
+          }
+        : null,
       target: log.target
         ? {
             id: log.target.id,

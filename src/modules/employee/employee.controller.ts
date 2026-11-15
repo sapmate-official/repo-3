@@ -91,7 +91,7 @@ export class EmployeeController {
         throw new AppError('Organization context required', 400, 'ORG_CONTEXT_MISSING');
       }
 
-      const managerId = strParam(req.params.userId) ?? strParam(req.query.managerId);
+      const managerId = strParam(req.params.userId) ?? strParam(req.query.managerId) ?? req.user?.id;
       if (!managerId) {
         throw new AppError('Manager ID is required', 400, 'MANAGER_ID_REQUIRED');
       }

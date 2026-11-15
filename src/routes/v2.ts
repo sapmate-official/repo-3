@@ -27,6 +27,9 @@ import {
   taskRouter,
   whatsappRouter
 } from '../modules/task/task.router.js';
+import { activityLogRouter } from '../modules/activity-logs/activity-log.router.js';
+import { eventsRouter } from '../modules/events/events.router.js';
+import { notificationRouter } from '../modules/notifications/notification.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -125,7 +128,19 @@ v2Router.use('/task-group', taskGroupRouter);
 v2Router.use('/task-groups', taskGroupRouter);
 v2Router.use('/whatsapp', whatsappRouter);
 
+// Events endpoints
+v2Router.use('/events', eventsRouter);
+
+// Activity Logs endpoints
+v2Router.use('/activity-logs', activityLogRouter);
+v2Router.use('/activity-log', activityLogRouter);
+
+// Notifications endpoints
+v2Router.use('/notification', notificationRouter);
+v2Router.use('/notifications', notificationRouter);
+
 // User profile & management endpoints (/api/v2/user/...)
+
 v2Router.get(
   '/user/user-list',
   authenticateAny,
@@ -149,6 +164,13 @@ v2Router.get(
 );
 v2Router.get(
   '/user/subordinates/:userId',
+  authenticateAny,
+  requireOrgScope(),
+  requirePermission(PERMISSION_KEYS.viewSubordinates),
+  EmployeeController.listSubordinates
+);
+v2Router.get(
+  '/user/subordinate-list',
   authenticateAny,
   requireOrgScope(),
   requirePermission(PERMISSION_KEYS.viewSubordinates),

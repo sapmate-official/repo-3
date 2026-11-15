@@ -212,7 +212,7 @@ export async function syncHolidaysForOrg(params: {
 async function runCli() {
   const targetYear = 2027;
   const targetCountry = 'IN';
-  const targetOrgId = 'cm7ukscsi0000p8ujzrr7di2o'; // Sapmate Training
+  const targetOrgId = 'cm7ukscsi0000p8ujzrr7di2o'; // ShapeNXT
 
   try {
     const results = await syncHolidaysForOrg({

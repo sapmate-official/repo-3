@@ -22,6 +22,11 @@ import {
 import { holidayRouter, holidayTypeRouter } from '../modules/holiday/holiday.router.js';
 import { bankRouter } from '../modules/bank/bank.router.js';
 import { relationshipRouter } from '../modules/relationship/relationship.router.js';
+import {
+  taskGroupRouter,
+  taskRouter,
+  whatsappRouter
+} from '../modules/task/task.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -112,6 +117,13 @@ v2Router.use('/bank', bankRouter);
 // Relationship endpoints
 v2Router.use('/relationship', relationshipRouter);
 v2Router.use('/relationships', relationshipRouter);
+
+// Task Management endpoints
+v2Router.use('/task', taskRouter);
+v2Router.use('/tasks', taskRouter);
+v2Router.use('/task-group', taskGroupRouter);
+v2Router.use('/task-groups', taskGroupRouter);
+v2Router.use('/whatsapp', whatsappRouter);
 
 // User profile & management endpoints (/api/v2/user/...)
 v2Router.get(

@@ -48,7 +48,9 @@ const prismaMock = vi.hoisted(() => ({
     upsert: vi.fn()
   },
   salaryRecord: {
-    findUnique: vi.fn()
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    upsert: vi.fn()
   }
 }));
 
@@ -328,6 +330,153 @@ describe('Payroll Engine Architecture', () => {
             id: 'payslip-1',
             exists: true,
             status: 'DISBURSED'
+          })
+        })
+      );
+    });
+
+    it('returns empty array when no payslips exist and userId is "undefined"', async () => {
+      prismaMock.payslipRecord.findMany.mockResolvedValue([]);
+      prismaMock.salaryRecord.findMany.mockResolvedValue([]);
+
+      const req = {
+        params: { userId: 'undefined', month: '11', year: '2026' },
+        user: { id: 'user-1', orgId: 'org-1' }
+      } as unknown as Request;
+
+      const res = mockRes();
+      await PayrollCompatController.getPayslipByParams(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        count: 0,
+        data: []
+      });
+    });
+
+    it('returns formatted payslips when payslips exist', async () => {
+      prismaMock.payslipRecord.findMany.mockResolvedValue([
+        {
+          id: 'payslip-1',
+          employeeId: 'user-1',
+          grossEarnings: 50000,
+          netPay: 45000,
+          totalDeductions: 5000,
+          createdAt: new Date('2026-11-15T00:00:00.000Z'),
+          employee: {
+            id: 'user-1',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            employeeId: 'EMP001',
+            department: { name: 'Engineering' },
+            bankDetails: {
+              accountNumber: '1234567890',
+              bankName: 'HDFC',
+              ifscCode: 'HDFC0001'
+            }
+          },
+          run: {
+            month: 11,
+            year: 2026,
+            status: 'DISBURSED',
+            disbursedAt: new Date('2026-11-15T12:00:00.000Z')
+          },
+          lineItems: [
+            { componentCode: 'BASIC', category: 'EARNING', finalAmount: 30000 },
+            { componentCode: 'HRA', category: 'EARNING', finalAmount: 20000 },
+            { componentCode: 'TDS', category: 'DEDUCTION', finalAmount: 5000 }
+          ]
+        }
+      ]);
+
+      const req = {
+        params: { userId: 'undefined', month: '11', year: '2026' },
+        user: { id: 'user-1', orgId: 'org-1' }
+      } as unknown as Request;
+
+      const res = mockRes();
+      await PayrollCompatController.getPayslipByParams(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          count: 1,
+          data: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'payslip-1',
+              userId: 'user-1',
+              basicSalary: 30000,
+              netSalary: 45000,
+              employee: expect.objectContaining({
+                firstName: 'Jane',
+                department: 'Engineering'
+              })
+            })
+          ])
+        })
+      );
+    });
+
+    it('generates salary and returns formatted payslip for legacy frontend', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        orgId: 'org-1',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane@example.com',
+        monthlySalary: 60000,
+        department: { name: 'Engineering' },
+        salaryParameter: {
+          hraPercentage: 40,
+          daPercentage: 10,
+          taPercentage: 10,
+          pfPercentage: 12,
+          tdsPercentage: 10
+        },
+        bankDetails: {
+          accountNumber: '1234567890',
+          bankName: 'HDFC',
+          ifscCode: 'HDFC0001'
+        }
+      });
+      prismaMock.attendanceRecord.count.mockResolvedValue(21);
+      prismaMock.leaveRequest.findMany.mockResolvedValue([]);
+      prismaMock.payrollRun.findUnique.mockResolvedValue(null);
+      prismaMock.payrollRun.create.mockResolvedValue({
+        id: 'run-gen-1',
+        companyId: 'org-1',
+        year: 2026,
+        month: 11,
+        status: 'PENDING_REVIEW'
+      });
+      prismaMock.payslipRecord.findUnique.mockResolvedValue(null);
+      prismaMock.payslipRecord.create.mockResolvedValue({
+        id: 'payslip-gen-1',
+        createdAt: new Date('2026-11-15T00:00:00.000Z')
+      });
+      prismaMock.salaryRecord.upsert.mockResolvedValue({ id: 'sal-1' });
+
+      const req = {
+        params: { userId: 'undefined', month: '11', year: '2026' },
+        user: { id: 'user-1', orgId: 'org-1' }
+      } as unknown as Request;
+
+      const res = mockRes();
+      await PayrollCompatController.generateSalary(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: 'Salary generated successfully',
+          data: expect.objectContaining({
+            id: 'payslip-gen-1',
+            userId: 'user-1',
+            month: 11,
+            year: 2026,
+            basicSalary: 60000
           })
         })
       );

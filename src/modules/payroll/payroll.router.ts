@@ -28,9 +28,14 @@ payrollRouter.get('/my-payslips', PayrollController.getMyPayslips);
 
 // Compatibility endpoints for legacy frontend v3 calls
 payrollRouter.get('/payslip/:month/:year/:userId', PayrollCompatController.getPayslipByParams);
+payrollRouter.get('/payslip/:month/:year', PayrollCompatController.getPayslipByParams);
+payrollRouter.post('/salary-generate/:month/:year/:userId', PayrollCompatController.generateSalary);
+payrollRouter.post('/salary-generate/:month/:year', PayrollCompatController.generateSalary);
+payrollRouter.get('/statistics/:salaryRecordId', PayrollCompatController.getSalaryStatistics);
 payrollRouter.get('/download/:salaryRecordId', PayrollCompatController.downloadPayslip);
 payrollRouter.get('/download/:id', PayrollCompatController.downloadPayslip);
 payrollRouter.get('/pre-stats/:month/:year/:userId', PayrollCompatController.preStatsSalaryGeneration);
+payrollRouter.get('/pre-stats/:month/:year', PayrollCompatController.preStatsSalaryGeneration);
 
 // ==========================================
 // Compatibility Router for Legacy v2 /api/v2/payroll

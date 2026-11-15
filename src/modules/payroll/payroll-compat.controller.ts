@@ -13,6 +13,19 @@ const strParam = (val: unknown): string | undefined => {
   return typeof val === 'string' && val.trim() ? val.trim() : undefined;
 };
 
+interface FormattedEmployee {
+  firstName?: string;
+  lastName?: string;
+  employeeId?: string;
+  department?: string;
+  designation?: string;
+  bankDetails?: {
+    accountNumber: string;
+    bankName: string;
+    ifscCode: string;
+  };
+}
+
 export class PayrollCompatController {
   // GET & PUT /api/v2/payroll/parameters/:userId
   static async getParameters(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -149,19 +162,188 @@ export class PayrollCompatController {
     }
   }
 
-  // GET /api/v3/payroll/payslip/:month/:year/:userId
+  // GET /api/v3/payroll/payslip/:month/:year/:userId? & /api/v3/payroll/payslip/:month/:year
   static async getPayslipByParams(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = strParam(req.params.userId) ?? req.user?.id;
+      const rawUserId = strParam(req.params.userId);
+      const targetUserId = rawUserId && rawUserId !== 'undefined' ? rawUserId : req.user?.id;
       const month = parseInt(strParam(req.params.month) ?? '0', 10);
       const year = parseInt(strParam(req.params.year) ?? '0', 10);
 
-      if (!userId || !month || !year) {
-        throw new AppError('Parameters userId, month, and year required', 400, 'BAD_REQUEST');
+      if (!targetUserId || !month || !year) {
+        throw new AppError('Valid month and year are required', 400, 'BAD_REQUEST');
       }
 
-      const payslip = await prisma.payslipRecord.findFirst({
-        where: { employeeId: userId, run: { month, year } },
+      // Query modern PayslipRecord first
+      const payslips = await prisma.payslipRecord.findMany({
+        where: { employeeId: targetUserId, run: { month, year } },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              employeeId: true,
+              department: { select: { name: true } },
+              bankDetails: true
+            }
+          },
+          run: true,
+          lineItems: true
+        }
+      });
+
+      if (payslips.length > 0) {
+        const formatted = payslips.map((p) => {
+          const allowances: Record<string, number> = {};
+          const deductions: Record<string, number> = {};
+          let basicSalary = 0;
+
+          for (const item of p.lineItems) {
+            if (item.componentCode === 'BASIC') {
+              basicSalary = item.finalAmount;
+            } else if (item.category === 'EARNING') {
+              allowances[item.componentCode.toLowerCase()] = item.finalAmount;
+            } else if (item.category === 'DEDUCTION') {
+              deductions[item.componentCode.toLowerCase()] = item.finalAmount;
+            }
+          }
+
+          const maskedAccount = p.employee.bankDetails?.accountNumber
+            ? `XXXX${p.employee.bankDetails.accountNumber.slice(-4)}`
+            : undefined;
+
+          const employeeData: FormattedEmployee = {
+            firstName: p.employee.firstName ?? undefined,
+            lastName: p.employee.lastName ?? undefined,
+            employeeId: p.employee.employeeId ?? undefined,
+            department: p.employee.department?.name,
+            designation: p.employee.department?.name ?? 'Not Assigned',
+            bankDetails: p.employee.bankDetails
+              ? {
+                  accountNumber: maskedAccount ?? '',
+                  bankName: p.employee.bankDetails.bankName,
+                  ifscCode: p.employee.bankDetails.ifscCode
+                }
+              : undefined
+          };
+
+          return {
+            id: p.id,
+            userId: p.employeeId,
+            month: p.run.month,
+            year: p.run.year,
+            basicSalary: basicSalary > 0 ? basicSalary : p.grossEarnings,
+            netSalary: p.netPay,
+            status: p.run.status,
+            processedAt: p.run.disbursedAt?.toISOString() ?? null,
+            createdAt: p.createdAt.toISOString(),
+            allowances,
+            deductions,
+            employee: employeeData
+          };
+        });
+
+        res.status(200).json({
+          success: true,
+          count: formatted.length,
+          data: formatted
+        });
+        return;
+      }
+
+      // Fallback to legacy SalaryRecord
+      const legacyRecords = await prisma.salaryRecord.findMany({
+        where: { userId: targetUserId, month, year },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              employeeId: true,
+              department: { select: { name: true } },
+              bankDetails: true
+            }
+          }
+        }
+      });
+
+      if (legacyRecords.length > 0) {
+        const formatted = legacyRecords.map((r) => {
+          const maskedAccount = r.user.bankDetails?.accountNumber
+            ? `XXXX${r.user.bankDetails.accountNumber.slice(-4)}`
+            : undefined;
+
+          const employeeData: FormattedEmployee = {
+            firstName: r.user.firstName ?? undefined,
+            lastName: r.user.lastName ?? undefined,
+            employeeId: r.user.employeeId ?? undefined,
+            department: r.user.department?.name,
+            designation: r.user.department?.name ?? 'Not Assigned',
+            bankDetails: r.user.bankDetails
+              ? {
+                  accountNumber: maskedAccount ?? '',
+                  bankName: r.user.bankDetails.bankName,
+                  ifscCode: r.user.bankDetails.ifscCode
+                }
+              : undefined
+          };
+
+          return {
+            id: r.id,
+            userId: r.userId,
+            month: r.month,
+            year: r.year,
+            basicSalary: r.basicSalary,
+            netSalary: r.netSalary,
+            status: r.status,
+            processedAt: r.processedAt?.toISOString() ?? null,
+            createdAt: r.createdAt.toISOString(),
+            allowances: (r.allowances as Record<string, number>) ?? {},
+            deductions: (r.deductions as Record<string, number>) ?? {},
+            paymentMode: r.paymentMode ?? undefined,
+            paymentRef: r.paymentRef ?? undefined,
+            remarks: r.remarks ?? undefined,
+            incentive: r.incentive ?? undefined,
+            bonus: r.bonus ?? undefined,
+            employee: employeeData
+          };
+        });
+
+        res.status(200).json({
+          success: true,
+          count: formatted.length,
+          data: formatted
+        });
+        return;
+      }
+
+      // No payslips exist for this period -> Return 200 with empty array (do NOT throw 404!)
+      res.status(200).json({
+        success: true,
+        count: 0,
+        data: []
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // GET /api/v3/payroll/statistics/:salaryRecordId
+  static async getSalaryStatistics(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const recordId = strParam(req.params.salaryRecordId);
+      if (!recordId) throw new AppError('Salary record ID required', 400, 'BAD_REQUEST');
+
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+      // Check modern PayslipRecord first
+      const p = await prisma.payslipRecord.findUnique({
+        where: { id: recordId },
         include: {
           employee: {
             select: {
@@ -169,21 +351,369 @@ export class PayrollCompatController {
               firstName: true,
               lastName: true,
               email: true,
+              employeeId: true,
               department: { select: { name: true } }
             }
           },
-          run: {
-            include: { organization: true }
-          },
+          run: true,
           lineItems: true
         }
       });
 
-      if (!payslip) {
-        throw new AppError('Payslip not found for this period', 404, 'NOT_FOUND');
+      if (p) {
+        const monthName = monthNames[p.run.month - 1] ?? 'Unknown';
+        const allowanceDetails: Record<string, number> = {};
+        const deductionDetails: Record<string, number> = {};
+        let basicSalary = 0;
+        let taxAmount = 0;
+
+        for (const item of p.lineItems) {
+          if (item.componentCode === 'BASIC') {
+            basicSalary = item.finalAmount;
+          } else if (item.componentCode === 'TDS') {
+            taxAmount = item.finalAmount;
+            deductionDetails[item.componentCode] = item.finalAmount;
+          } else if (item.category === 'EARNING') {
+            allowanceDetails[item.componentCode] = item.finalAmount;
+          } else if (item.category === 'DEDUCTION') {
+            deductionDetails[item.componentCode] = item.finalAmount;
+          }
+        }
+
+        const fullName = `${p.employee.firstName ?? ''} ${p.employee.lastName ?? ''}`.trim() || p.employee.email;
+
+        res.status(200).json({
+          success: true,
+          data: {
+            basicInfo: {
+              salaryRecordId: p.id,
+              month: p.run.month,
+              monthName,
+              year: p.run.year,
+              employee: {
+                id: p.employee.id,
+                name: fullName,
+                employeeId: p.employee.employeeId ?? '',
+                department: p.employee.department?.name ?? 'Unassigned'
+              },
+              status: p.run.status,
+              processedAt: p.run.disbursedAt?.toISOString() ?? null,
+              paymentInfo: {
+                mode: null,
+                reference: null,
+                remarks: null
+              }
+            },
+            salaryBreakdown: {
+              basicSalary: basicSalary > 0 ? basicSalary : p.grossEarnings,
+              totalAllowances: p.grossEarnings - basicSalary,
+              allowanceDetails,
+              totalDeductions: p.totalDeductions,
+              deductionDetails,
+              netSalary: p.netPay,
+              taxAmount,
+              additionalPayments: { incentive: 0, bonus: 0 }
+            },
+            attendanceAnalysis: {
+              totalDaysInMonth: new Date(p.run.year, p.run.month, 0).getDate(),
+              workingDays: p.workingDays,
+              presentDays: p.presentDays,
+              halfDays: 0,
+              absentDays: p.lopDays,
+              paidLeaveDays: 0,
+              unpaidLeaveDays: p.lopDays
+            }
+          }
+        });
+        return;
       }
 
-      res.status(200).json({ success: true, data: payslip });
+      // Fallback to legacy SalaryRecord
+      const legacy = await prisma.salaryRecord.findUnique({
+        where: { id: recordId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              employeeId: true,
+              department: { select: { name: true } }
+            }
+          }
+        }
+      });
+
+      if (!legacy) throw new AppError('Salary record not found', 404, 'NOT_FOUND');
+
+      const monthName = monthNames[legacy.month - 1] ?? 'Unknown';
+      const fullName = `${legacy.user.firstName ?? ''} ${legacy.user.lastName ?? ''}`.trim() || legacy.user.email;
+
+      res.status(200).json({
+        success: true,
+        data: {
+          basicInfo: {
+            salaryRecordId: legacy.id,
+            month: legacy.month,
+            monthName,
+            year: legacy.year,
+            employee: {
+              id: legacy.user.id,
+              name: fullName,
+              employeeId: legacy.user.employeeId ?? '',
+              department: legacy.user.department?.name ?? 'Unassigned'
+            },
+            status: legacy.status,
+            processedAt: legacy.processedAt?.toISOString() ?? null,
+            paymentInfo: {
+              mode: legacy.paymentMode,
+              reference: legacy.paymentRef,
+              remarks: legacy.remarks
+            }
+          },
+          salaryBreakdown: {
+            basicSalary: legacy.basicSalary,
+            totalAllowances: 0,
+            allowanceDetails: (legacy.allowances as Record<string, number>) ?? {},
+            totalDeductions: 0,
+            deductionDetails: (legacy.deductions as Record<string, number>) ?? {},
+            netSalary: legacy.netSalary,
+            taxAmount: legacy.tax,
+            additionalPayments: {
+              incentive: legacy.incentive ?? 0,
+              bonus: legacy.bonus ?? 0
+            }
+          },
+          attendanceAnalysis: {
+            totalDaysInMonth: new Date(legacy.year, legacy.month, 0).getDate(),
+            workingDays: 22,
+            presentDays: 22,
+            halfDays: 0,
+            absentDays: 0,
+            paidLeaveDays: 0,
+            unpaidLeaveDays: 0
+          }
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /api/v3/payroll/salary-generate/:month/:year/:userId? & /api/v3/payroll/salary-generate/:month/:year
+  static async generateSalary(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const rawUserId = strParam(req.params.userId);
+      const targetUserId = rawUserId && rawUserId !== 'undefined' ? rawUserId : req.user?.id;
+      const month = parseInt(strParam(req.params.month) ?? '0', 10);
+      const year = parseInt(strParam(req.params.year) ?? '0', 10);
+
+      if (!targetUserId || !month || !year) {
+        throw new AppError('Valid user, month, and year are required', 400, 'BAD_REQUEST');
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: targetUserId },
+        include: {
+          salaryParameter: true,
+          bankDetails: true,
+          department: { select: { name: true } }
+        }
+      });
+
+      if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+
+      const attendanceCount = await prisma.attendanceRecord.count({
+        where: {
+          userId: targetUserId,
+          date: { gte: startDate, lt: endDate },
+          status: { in: ['PRESENT', 'HALF_DAY'] }
+        }
+      });
+
+      const approvedLeaves = await prisma.leaveRequest.findMany({
+        where: {
+          userId: targetUserId,
+          status: 'APPROVED',
+          startDate: { lt: endDate },
+          endDate: { gte: startDate }
+        }
+      });
+
+      const approvedLeaveDays = approvedLeaves.reduce((acc, l) => {
+        const s = Math.max(l.startDate.getTime(), startDate.getTime());
+        const e = Math.min(l.endDate.getTime(), endDate.getTime());
+        return acc + Math.max(0, Math.ceil((e - s) / (1000 * 60 * 60 * 24)));
+      }, 0);
+
+      const workingDays = getWorkingDaysInMonth(year, month);
+
+      const calc = calculateEmployeePayroll(
+        {
+          userId: user.id,
+          firstName: user.firstName ?? '',
+          lastName: user.lastName ?? '',
+          email: user.email,
+          monthlySalary: user.monthlySalary ?? 0,
+          bankDetails: user.bankDetails,
+          salaryParameter: user.salaryParameter,
+          attendanceCount,
+          approvedLeaveDays
+        },
+        workingDays
+      );
+
+      // Find or create pay run for the organization
+      let run = await prisma.payrollRun.findUnique({
+        where: { companyId_year_month: { companyId: user.orgId, year, month } }
+      });
+
+      run ??= await prisma.payrollRun.create({
+        data: {
+          companyId: user.orgId,
+          year,
+          month,
+          status: 'PENDING_REVIEW',
+          makerId: req.user?.id ?? targetUserId,
+          notes: 'Auto-generated via Salary Generator'
+        }
+      });
+
+      // Upsert PayslipRecord
+      const existingPayslip = await prisma.payslipRecord.findUnique({
+        where: { runId_employeeId: { runId: run.id, employeeId: targetUserId } }
+      });
+
+      let payslip;
+      if (existingPayslip) {
+        await prisma.payslipLineItem.deleteMany({ where: { payslipId: existingPayslip.id } });
+        payslip = await prisma.payslipRecord.update({
+          where: { id: existingPayslip.id },
+          data: {
+            compensationSnapshot: calc.compensationSnapshot as Prisma.InputJsonValue,
+            attendanceSnapshot: calc.attendanceSnapshot as Prisma.InputJsonValue,
+            workingDays: calc.workingDays,
+            presentDays: calc.presentDays,
+            lopDays: calc.lopDays,
+            grossEarnings: calc.grossEarnings,
+            totalDeductions: calc.totalDeductions,
+            netPay: calc.netPay,
+            hasAnomaly: calc.hasAnomaly,
+            anomalyReason: calc.anomalyReason,
+            lineItems: {
+              create: calc.lineItems.map((item) => ({
+                componentCode: item.componentCode,
+                category: item.category,
+                systemAmount: item.systemAmount,
+                finalAmount: item.finalAmount
+              }))
+            }
+          }
+        });
+      } else {
+        payslip = await prisma.payslipRecord.create({
+          data: {
+            runId: run.id,
+            employeeId: targetUserId,
+            compensationSnapshot: calc.compensationSnapshot as Prisma.InputJsonValue,
+            attendanceSnapshot: calc.attendanceSnapshot as Prisma.InputJsonValue,
+            workingDays: calc.workingDays,
+            presentDays: calc.presentDays,
+            lopDays: calc.lopDays,
+            grossEarnings: calc.grossEarnings,
+            totalDeductions: calc.totalDeductions,
+            netPay: calc.netPay,
+            hasAnomaly: calc.hasAnomaly,
+            anomalyReason: calc.anomalyReason,
+            lineItems: {
+              create: calc.lineItems.map((item) => ({
+                componentCode: item.componentCode,
+                category: item.category,
+                systemAmount: item.systemAmount,
+                finalAmount: item.finalAmount
+              }))
+            }
+          }
+        });
+      }
+
+      // Also upsert legacy SalaryRecord for backward compatibility
+      const allowancesObj: Record<string, number> = {};
+      const deductionsObj: Record<string, number> = {};
+      for (const item of calc.lineItems) {
+        if (item.category === 'EARNING' && item.componentCode !== 'BASIC') {
+          allowancesObj[item.componentCode.toLowerCase()] = item.finalAmount;
+        } else if (item.category === 'DEDUCTION') {
+          deductionsObj[item.componentCode.toLowerCase()] = item.finalAmount;
+        }
+      }
+
+      await prisma.salaryRecord.upsert({
+        where: { userId_month_year: { userId: targetUserId, month, year } },
+        create: {
+          userId: targetUserId,
+          month,
+          year,
+          basicSalary: user.monthlySalary ?? 0,
+          netSalary: calc.netPay,
+          tax: calc.lineItems.find((i) => i.componentCode === 'TDS')?.finalAmount ?? 0,
+          allowances: allowancesObj,
+          deductions: deductionsObj,
+          status: 'PROCESSED'
+        },
+        update: {
+          basicSalary: user.monthlySalary ?? 0,
+          netSalary: calc.netPay,
+          tax: calc.lineItems.find((i) => i.componentCode === 'TDS')?.finalAmount ?? 0,
+          allowances: allowancesObj,
+          deductions: deductionsObj,
+          status: 'PROCESSED'
+        }
+      });
+
+      const maskedAccount = user.bankDetails?.accountNumber
+        ? `XXXX${user.bankDetails.accountNumber.slice(-4)}`
+        : undefined;
+
+      const employeeData: FormattedEmployee = {
+        firstName: user.firstName ?? undefined,
+        lastName: user.lastName ?? undefined,
+        employeeId: user.employeeId ?? undefined,
+        department: user.department?.name,
+        designation: user.department?.name ?? 'Not Assigned',
+        bankDetails: user.bankDetails
+          ? {
+              accountNumber: maskedAccount ?? '',
+              bankName: user.bankDetails.bankName,
+              ifscCode: user.bankDetails.ifscCode
+            }
+          : undefined
+      };
+
+      const formattedPayslip = {
+        id: payslip.id,
+        userId: targetUserId,
+        month,
+        year,
+        basicSalary: user.monthlySalary ?? 0,
+        netSalary: calc.netPay,
+        status: run.status,
+        processedAt: new Date().toISOString(),
+        createdAt: payslip.createdAt.toISOString(),
+        allowances: allowancesObj,
+        deductions: deductionsObj,
+        employee: employeeData
+      };
+
+      res.status(200).json({
+        success: true,
+        message: 'Salary generated successfully',
+        data: formattedPayslip
+      });
     } catch (error) {
       next(error);
     }
@@ -242,19 +772,20 @@ export class PayrollCompatController {
     }
   }
 
-  // GET /api/v3/payroll/pre-stats/:month/:year/:userId
+  // GET /api/v3/payroll/pre-stats/:month/:year/:userId? & /api/v3/payroll/pre-stats/:month/:year
   static async preStatsSalaryGeneration(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = strParam(req.params.userId) ?? req.user?.id;
+      const rawUserId = strParam(req.params.userId);
+      const targetUserId = rawUserId && rawUserId !== 'undefined' ? rawUserId : req.user?.id;
       const month = parseInt(strParam(req.params.month) ?? '0', 10);
       const year = parseInt(strParam(req.params.year) ?? '0', 10);
 
-      if (!userId || !month || !year) {
+      if (!targetUserId || !month || !year) {
         throw new AppError('User ID, month, and year are required', 400, 'BAD_REQUEST');
       }
 
       const user = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: targetUserId },
         include: { salaryParameter: true, bankDetails: true }
       });
 
@@ -265,7 +796,7 @@ export class PayrollCompatController {
 
       const attendanceCount = await prisma.attendanceRecord.count({
         where: {
-          userId,
+          userId: targetUserId,
           date: { gte: startDate, lt: endDate },
           status: { in: ['PRESENT', 'HALF_DAY'] }
         }
@@ -273,7 +804,7 @@ export class PayrollCompatController {
 
       const approvedLeaves = await prisma.leaveRequest.findMany({
         where: {
-          userId,
+          userId: targetUserId,
           status: 'APPROVED',
           startDate: { lt: endDate },
           endDate: { gte: startDate }

@@ -174,24 +174,49 @@ export class PayrollCompatController {
         throw new AppError('Valid month and year are required', 400, 'BAD_REQUEST');
       }
 
-      // Query modern PayslipRecord first
-      const payslips = await prisma.payslipRecord.findMany({
-        where: { employeeId: targetUserId, run: { month, year } },
+      // Query modern PayslipRecord first (with graceful fallback to legacy if unmigrated)
+      type DetailedPayslip = Prisma.PayslipRecordGetPayload<{
         include: {
           employee: {
             select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              employeeId: true,
-              department: { select: { name: true } },
-              bankDetails: true
-            }
-          },
-          run: true,
-          lineItems: true
+              id: true;
+              firstName: true;
+              lastName: true;
+              employeeId: true;
+              department: { select: { name: true } };
+              bankDetails: true;
+            };
+          };
+          run: true;
+          lineItems: true;
+        };
+      }>;
+
+      let payslips: DetailedPayslip[] = [];
+      try {
+        payslips = await prisma.payslipRecord.findMany({
+          where: { employeeId: targetUserId, run: { month, year } },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeId: true,
+                department: { select: { name: true } },
+                bankDetails: true
+              }
+            },
+            run: true,
+            lineItems: true
+          }
+        });
+      } catch (err: unknown) {
+        const error = err as { code?: string };
+        if (error.code !== 'P2021') {
+          throw err;
         }
-      });
+      }
 
       if (payslips.length > 0) {
         const formatted = payslips.map((p) => {
@@ -342,23 +367,46 @@ export class PayrollCompatController {
       ];
 
       // Check modern PayslipRecord first
-      const p = await prisma.payslipRecord.findUnique({
-        where: { id: recordId },
+      type StatPayslip = Prisma.PayslipRecordGetPayload<{
         include: {
           employee: {
             select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              employeeId: true,
-              department: { select: { name: true } }
-            }
-          },
-          run: true,
-          lineItems: true
-        }
-      });
+              id: true;
+              firstName: true;
+              lastName: true;
+              email: true;
+              employeeId: true;
+              department: { select: { name: true } };
+            };
+          };
+          run: true;
+          lineItems: true;
+        };
+      }>;
+
+      let p: StatPayslip | null = null;
+      try {
+        p = await prisma.payslipRecord.findUnique({
+          where: { id: recordId },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                employeeId: true,
+                department: { select: { name: true } }
+              }
+            },
+            run: true,
+            lineItems: true
+          }
+        });
+      } catch (err: unknown) {
+        const error = err as { code?: string };
+        if (error.code !== 'P2021') throw err;
+      }
 
       if (p) {
         const monthName = monthNames[p.run.month - 1] ?? 'Unknown';
@@ -849,11 +897,18 @@ export class PayrollCompatController {
         throw new AppError('User ID is required', 400, 'BAD_REQUEST');
       }
 
-      const payslips = await prisma.payslipRecord.findMany({
-        where: { employeeId: targetUserId },
-        include: { run: true, lineItems: true },
-        orderBy: [{ run: { year: 'desc' } }, { run: { month: 'desc' } }]
-      });
+      type UserPayslip = Prisma.PayslipRecordGetPayload<{ include: { run: true; lineItems: true } }>;
+      let payslips: UserPayslip[] = [];
+      try {
+        payslips = await prisma.payslipRecord.findMany({
+          where: { employeeId: targetUserId },
+          include: { run: true, lineItems: true },
+          orderBy: [{ run: { year: 'desc' } }, { run: { month: 'desc' } }]
+        });
+      } catch (err: unknown) {
+        const error = err as { code?: string };
+        if (error.code !== 'P2021') throw err;
+      }
 
       if (payslips.length > 0) {
         const formatted = payslips.map((p) => ({

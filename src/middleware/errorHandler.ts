@@ -95,6 +95,16 @@ export const errorHandler = (
       });
       return;
     }
+    if (err.code === 'P2021') {
+      res.status(500).json({
+        success: false,
+        message: 'A required database table is missing in the database. Please synchronize migrations.',
+        error: 'Database Schema Out Of Sync',
+        code: 'TABLE_NOT_FOUND',
+        requestId
+      });
+      return;
+    }
   }
 
   // 5. General HTTP / Application Errors

@@ -1026,7 +1026,7 @@ export class SuperAdminController {
         },
         pendingBills: pendingBills.map((b) => ({
           organizationId: b.organizationId,
-          organizationName: b.organization.name,
+          organizationName: b.organization?.name ?? 'Unknown Organization',
           amount: b.totalAmount,
           dueDate: b.dueDate
         }))

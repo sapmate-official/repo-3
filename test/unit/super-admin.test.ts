@@ -50,7 +50,7 @@ vi.mock('../../src/services/email.service.js', () => emailMock);
 
 import { SuperAdminController } from '../../src/modules/super-admin/super-admin.controller.js';
 
-describe('SuperAdminController', () => {
+describe('SuperAdminController Comprehensive Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -66,7 +66,7 @@ describe('SuperAdminController', () => {
 
   const next: NextFunction = vi.fn();
 
-  describe('Authentication flows', () => {
+  describe('Authentication & Session Management', () => {
     it('authenticates valid super admin credentials and issues session cookies', async () => {
       const hashed = await bcrypt.hash('Secret123!', 10);
       prismaMock.superAdmin.findFirst.mockResolvedValue({
@@ -98,6 +98,23 @@ describe('SuperAdminController', () => {
         expect.objectContaining({
           message: 'Super Admin logged in successfully',
           accessToken: 'mock-access-token'
+        })
+      );
+    });
+
+    it('rejects login with non-existent email', async () => {
+      prismaMock.superAdmin.findFirst.mockResolvedValue(null);
+
+      const req = {
+        body: { email: 'nonexistent@alkaa.online', password: 'Password123!' }
+      } as Request;
+      const res = mockRes();
+
+      await SuperAdminController.login(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'No super admin exists with this Email'
         })
       );
     });
@@ -137,9 +154,167 @@ describe('SuperAdminController', () => {
       expect(res.clearCookie).toHaveBeenCalledWith('refreshToken', expect.any(Object));
       expect(res.status).toHaveBeenCalledWith(200);
     });
+
+    it('validates current super admin session token', async () => {
+      const req = {
+        superAdmin: { id: 'sa-1', email: 'admin@alkaa.online', name: 'Master', isSuperAdmin: true }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.validateToken(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Super Admin token validated successfully'
+        })
+      );
+    });
+
+    it('returns authenticated user information', async () => {
+      prismaMock.superAdmin.findUnique.mockResolvedValue({
+        id: 'sa-1',
+        email: 'admin@alkaa.online',
+        name: 'Master Admin',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      const req = {
+        superAdmin: { id: 'sa-1', email: 'admin@alkaa.online', name: 'Master Admin', isSuperAdmin: true }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.getUserInfo(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userData: expect.objectContaining({
+            id: 'sa-1',
+            email: 'admin@alkaa.online'
+          })
+        })
+      );
+    });
   });
 
-  describe('Organization Tracking & Stats', () => {
+  describe('SuperAdmin Account Management CRUD', () => {
+    it('lists all super admins', async () => {
+      const admins = [
+        { id: 'sa-1', email: 'admin1@alkaa.online', name: 'Admin 1', createdAt: new Date() },
+        { id: 'sa-2', email: 'admin2@alkaa.online', name: 'Admin 2', createdAt: new Date() }
+      ];
+      prismaMock.superAdmin.findMany.mockResolvedValue(admins);
+
+      const req = {} as Request;
+      const res = mockRes();
+
+      await SuperAdminController.getSuperAdmins(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(admins);
+    });
+
+    it('retrieves single super admin by ID', async () => {
+      const admin = { id: 'sa-1', email: 'admin@alkaa.online', name: 'Admin', createdAt: new Date() };
+      prismaMock.superAdmin.findUnique.mockResolvedValue(admin);
+
+      const req = { params: { id: 'sa-1' } } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.getSuperAdminById(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(admin);
+    });
+
+    it('creates super admin when valid secretKey is provided', async () => {
+      process.env.SUPER_ADMIN_SECRET_KEY = 'test-secret-key-123';
+      prismaMock.superAdmin.findUnique.mockResolvedValue(null);
+      prismaMock.superAdmin.create.mockResolvedValue({
+        id: 'sa-new',
+        email: 'newadmin@alkaa.online',
+        name: 'New Admin',
+        createdAt: new Date()
+      });
+
+      const req = {
+        body: {
+          email: 'newadmin@alkaa.online',
+          name: 'New Admin',
+          password: 'Password123!',
+          secretKey: 'test-secret-key-123'
+        }
+      } as Request;
+      const res = mockRes();
+
+      await SuperAdminController.createSuperAdmin(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Super admin created successfully'
+        })
+      );
+    });
+
+    it('rejects creating super admin with invalid secretKey and no active session', async () => {
+      process.env.SUPER_ADMIN_SECRET_KEY = 'correct-key';
+
+      const req = {
+        body: {
+          email: 'hacker@example.com',
+          name: 'Intruder',
+          password: 'Password123!',
+          secretKey: 'wrong-key'
+        }
+      } as Request;
+      const res = mockRes();
+
+      await SuperAdminController.createSuperAdmin(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Unauthorized')
+        })
+      );
+    });
+
+    it('prevents super admin from deleting their own account', async () => {
+      const req = {
+        params: { id: 'sa-1' },
+        superAdmin: { id: 'sa-1', email: 'admin@alkaa.online', name: 'Admin', isSuperAdmin: true }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.deleteSuperAdmin(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Cannot delete your own super admin account'
+        })
+      );
+    });
+
+    it('deletes another super admin account successfully', async () => {
+      prismaMock.superAdmin.findUnique.mockResolvedValue({ id: 'sa-2' });
+      prismaMock.superAdmin.delete.mockResolvedValue({ id: 'sa-2' });
+
+      const req = {
+        params: { id: 'sa-2' },
+        superAdmin: { id: 'sa-1', email: 'admin@alkaa.online', name: 'Admin', isSuperAdmin: true }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.deleteSuperAdmin(req, res, next);
+
+      expect(prismaMock.superAdmin.delete).toHaveBeenCalledWith({ where: { id: 'sa-2' } });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+  });
+
+  describe('Organization Tracking & User Listing', () => {
     it('computes daysRemaining and subscriptionStatus across organizations', async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 30);
@@ -206,6 +381,64 @@ describe('SuperAdminController', () => {
         })
       );
     });
+
+    it('retrieves paginated organization users', async () => {
+      prismaMock.user.count.mockResolvedValue(42);
+      prismaMock.user.findMany.mockResolvedValue([
+        {
+          id: 'u-1',
+          email: 'user1@shapenxt.com',
+          firstName: 'Alice',
+          lastName: 'Smith',
+          status: 'active',
+          roles: [{ role: { id: 'r-1', name: 'Employee' } }],
+          department: { id: 'd-1', name: 'Tech' }
+        }
+      ]);
+
+      const req = {
+        params: { id: 'org-1' },
+        query: { page: '2', limit: '10' }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.getOrganizationUsers(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pagination: {
+            total: 42,
+            page: 2,
+            limit: 10,
+            pages: 5
+          }
+        })
+      );
+    });
+
+    it('retrieves admin users of an organization', async () => {
+      prismaMock.user.findMany.mockResolvedValue([
+        {
+          id: 'u-admin',
+          email: 'admin@shapenxt.com',
+          firstName: 'Bob',
+          lastName: 'Admin',
+          employeeId: 'EMP-001',
+          roles: [{ role: { id: 'r-admin', name: 'Org_Admin' } }]
+        }
+      ]);
+
+      const req = { params: { id: 'org-1' } } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.getOrganizationAdmins(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const admins = (res.json as any).mock.calls[0][0];
+      expect(admins).toHaveLength(1);
+      expect(admins[0].roles[0].name).toBe('Org_Admin');
+    });
   });
 
   describe('Organization Billing Operations', () => {
@@ -251,6 +484,82 @@ describe('SuperAdminController', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
+    it('dispatches bill email to organization admins', async () => {
+      prismaMock.organization.findUnique.mockResolvedValue({
+        id: 'org-1',
+        name: 'ShapeNXT',
+        subscriptionPlan: { name: 'Growth', monthlyPrice: 15 }
+      });
+
+      prismaMock.billingRecord.findUnique.mockResolvedValue({
+        id: 'bill-1',
+        month: 11,
+        year: 2026,
+        totalAmount: 300,
+        activeUserCount: 20,
+        pricePerUser: 15,
+        dueDate: new Date()
+      });
+
+      prismaMock.user.findMany.mockResolvedValue([
+        { email: 'admin1@shapenxt.com' },
+        { email: 'admin2@shapenxt.com' }
+      ]);
+
+      const req = {
+        params: { id: 'org-1' },
+        body: { billId: 'bill-1' }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.sendBillEmail(req, res, next);
+
+      expect(emailMock.EmailService.sendBillingInvoiceEmail).toHaveBeenCalledTimes(2);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipients: ['admin1@shapenxt.com', 'admin2@shapenxt.com']
+        })
+      );
+    });
+
+    it('batch generates and dispatches bills to all active organizations', async () => {
+      prismaMock.organization.findMany.mockResolvedValue([
+        {
+          id: 'org-1',
+          name: 'ShapeNXT',
+          subscriptionPlan: { monthlyPrice: 10, name: 'Pro' },
+          _count: { users: 10 }
+        }
+      ]);
+
+      prismaMock.billingRecord.upsert.mockResolvedValue({
+        id: 'bill-1',
+        month: 11,
+        year: 2026,
+        totalAmount: 100,
+        activeUserCount: 10,
+        pricePerUser: 10,
+        dueDate: new Date()
+      });
+
+      prismaMock.user.findMany.mockResolvedValue([{ email: 'admin@shapenxt.com' }]);
+
+      const req = {
+        body: { month: 11, year: 2026 }
+      } as Request;
+      const res = mockRes();
+
+      await SuperAdminController.sendBillsToAllOrganizations(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Processed billing for 1 organization(s)'
+        })
+      );
+    });
+
     it('updates bill status to PAID and records payment timestamp', async () => {
       prismaMock.billingRecord.findUnique.mockResolvedValue({
         id: 'bill-1',
@@ -281,6 +590,30 @@ describe('SuperAdminController', () => {
         })
       );
       expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('processes bill payment and updates record', async () => {
+      prismaMock.billingRecord.findUnique.mockResolvedValue({ id: 'bill-1' });
+      prismaMock.billingRecord.update.mockResolvedValue({
+        id: 'bill-1',
+        status: 'PAID',
+        paymentReference: 'MANUAL-PAY'
+      });
+
+      const req = {
+        params: { id: 'bill-1' },
+        body: { paymentReference: 'MANUAL-PAY' }
+      } as unknown as Request;
+      const res = mockRes();
+
+      await SuperAdminController.processBillPayment(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Payment processed successfully'
+        })
+      );
     });
 
     it('aggregates platform billing statistics', async () => {

@@ -89,6 +89,7 @@ model Organization {
   tasks                 Task[]
   taskGroups            TaskGroup[]
   birthdayEmailLogs     BirthdayEmailLog[]
+  payrollRuns           PayrollRun[]
 }
 
 model Organization_admin {
@@ -279,6 +280,10 @@ model User {
   tempLoginSessions            TempLoginSession[]
   birthdayEmailLogs            BirthdayEmailLog[]
   authSessions                 AuthSession[]
+  payrollRunsMade              PayrollRun[]             @relation("PayrollMaker")
+  payrollRunsChecked           PayrollRun[]             @relation("PayrollChecker")
+  payslipRecords               PayslipRecord[]
+  payrollAuditLogs             PayrollAuditLog[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -1003,4 +1008,131 @@ model BirthdayEmailLog {
   @@index([userId, sentDate])
   @@index([organizationId, sentDate])
   @@index([sentDate, emailSent])
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  COMPUTING
+  PENDING_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  DISBURSED
+  FAILED
+}
+
+enum LineItemCategory {
+  EARNING
+  DEDUCTION
+  EMPLOYER_CONTRIBUTION
+  REIMBURSEMENT
+}
+
+model PayrollRun {
+  id              String            @id @default(cuid())
+  companyId       String
+  year            Int
+  month           Int
+  status          PayrollRunStatus  @default(DRAFT)
+  makerId         String
+  checkerId       String?
+  totalGross      Float             @default(0)
+  totalDeductions Float             @default(0)
+  totalNetPay     Float             @default(0)
+  lockedAt        DateTime?
+  approvedAt      DateTime?
+  disbursedAt     DateTime?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  organization       Organization         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  maker              User                 @relation("PayrollMaker", fields: [makerId], references: [id])
+  checker            User?                @relation("PayrollChecker", fields: [checkerId], references: [id])
+  payslips           PayslipRecord[]
+  auditLogs          PayrollAuditLog[]
+  disbursementBatch  DisbursementBatch?
+
+  @@unique([companyId, year, month])
+  @@index([companyId, status])
+}
+
+model PayslipRecord {
+  id                   String            @id @default(cuid())
+  runId                String
+  employeeId           String
+  compensationSnapshot Json
+  attendanceSnapshot   Json
+  workingDays          Int               @default(0)
+  presentDays          Float             @default(0)
+  lopDays              Float             @default(0)
+  grossEarnings        Float             @default(0)
+  totalDeductions      Float             @default(0)
+  netPay               Float             @default(0)
+  hasAnomaly           Boolean           @default(false)
+  anomalyReason        String?
+  payslipPdfUrl        String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  run                  PayrollRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employee             User              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  lineItems            PayslipLineItem[]
+  auditLogs            PayrollAuditLog[]
+
+  @@unique([runId, employeeId])
+  @@index([employeeId])
+  @@index([runId])
+}
+
+model PayslipLineItem {
+  id             String           @id @default(cuid())
+  payslipId      String
+  componentCode  String
+  category       LineItemCategory
+  systemAmount   Float
+  finalAmount    Float
+  isOverridden   Boolean          @default(false)
+  overrideReason String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  payslip        PayslipRecord    @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+  @@index([payslipId])
+}
+
+model PayrollAuditLog {
+  id            String         @id @default(cuid())
+  runId         String
+  payslipId     String?
+  actorId       String
+  actorRole     String
+  action        String
+  previousState String?
+  newState      String?
+  payloadDiff   Json?
+  reason        String?
+  createdAt     DateTime       @default(now())
+
+  run           PayrollRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  payslip       PayslipRecord? @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  actor         User           @relation(fields: [actorId], references: [id])
+
+  @@index([runId])
+  @@index([actorId])
+}
+
+model DisbursementBatch {
+  id             String      @id @default(cuid())
+  runId          String      @unique
+  bankAdviceFile Json?
+  totalAmount    Float
+  checksum       String
+  utr            String?
+  status         String      @default("PENDING")
+  disbursedAt    DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  run            PayrollRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
 }

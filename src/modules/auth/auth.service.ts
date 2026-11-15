@@ -62,9 +62,27 @@ export class AuthService {
   static async checkEmail(email: string): Promise<CheckEmailResponse> {
     const normalizedEmail = email.toLowerCase().trim();
 
-    const superAdmin = await prisma.superAdmin.findFirst({
-      where: { email: normalizedEmail }
-    });
+    // Query superAdmin and organization users concurrently to avoid sequential network roundtrips
+    const [superAdmin, users] = await Promise.all([
+      prisma.superAdmin.findFirst({
+        where: { email: normalizedEmail }
+      }),
+      prisma.user.findMany({
+        where: {
+          ...emailMatch(normalizedEmail),
+          status: { in: ['active', 'inactive'] }
+        },
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              isActive: true
+            }
+          }
+        }
+      })
+    ]);
 
     if (superAdmin) {
       return {
@@ -78,22 +96,6 @@ export class AuthService {
         message: 'Super Admin identified'
       };
     }
-
-    const users = await prisma.user.findMany({
-      where: {
-        ...emailMatch(normalizedEmail),
-        status: { in: ['active', 'inactive'] }
-      },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            isActive: true
-          }
-        }
-      }
-    });
 
     if (users.length === 0) {
       throw new AppError('User not found with this email.', 404, 'USER_NOT_FOUND');
@@ -146,10 +148,36 @@ export class AuthService {
   ): Promise<{ response: LoginSuccessResponse | LoginOtpRequiredResponse; tokens?: TokenPair }> {
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 1. SuperAdmin authentication
-    const superAdmin = await prisma.superAdmin.findFirst({
-      where: { email: normalizedEmail }
-    });
+    // Fetch SuperAdmin (skipped if explicit client orgId provided) and organization users concurrently
+    const isExplicitClientOrg = Boolean(orgId && orgId !== 'platform-superadmin');
+
+    const [superAdmin, users] = await Promise.all([
+      isExplicitClientOrg
+        ? Promise.resolve(null)
+        : prisma.superAdmin.findFirst({
+            where: { email: normalizedEmail }
+          }),
+      prisma.user.findMany({
+        where: {
+          ...emailMatch(normalizedEmail),
+          ...(isExplicitClientOrg ? { orgId } : {})
+        },
+        include: {
+          organization: { select: { id: true, name: true, isActive: true } },
+          roles: {
+            select: {
+              role: {
+                select: {
+                  name: true,
+                  permissions: { select: { permission: { select: { key: true } } } }
+                }
+              }
+            }
+          }
+        },
+        take: orgId ? 1 : 2
+      })
+    ]);
 
     if (superAdmin) {
       const isValid = await verifyPasswordHash(password, superAdmin.hashedPassword);
@@ -193,29 +221,6 @@ export class AuthService {
         }
       };
     }
-
-    // 2. Organization user authentication. Without an explicit orgId we must
-    // never guess between multiple organizations sharing an email domain.
-    const users = await prisma.user.findMany({
-      where: {
-        ...emailMatch(normalizedEmail),
-        ...(orgId ? { orgId } : {})
-      },
-      include: {
-        organization: { select: { id: true, name: true, isActive: true } },
-        roles: {
-          select: {
-            role: {
-              select: {
-                name: true,
-                permissions: { select: { permission: { select: { key: true } } } }
-              }
-            }
-          }
-        }
-      },
-      take: orgId ? 1 : 2
-    });
 
     const user = users[0];
     if (!user?.hashedPassword) {

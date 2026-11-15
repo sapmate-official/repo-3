@@ -282,6 +282,9 @@ model User {
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
+  @@index([email])
+  @@index([businessEmail])
+  @@index([personalEmail])
 }
 
 model UserRole {

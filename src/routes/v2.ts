@@ -30,6 +30,7 @@ import {
 import { activityLogRouter } from '../modules/activity-logs/activity-log.router.js';
 import { eventsRouter } from '../modules/events/events.router.js';
 import { notificationRouter } from '../modules/notifications/notification.router.js';
+import { billingRouter } from '../modules/billing/billing.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -138,6 +139,9 @@ v2Router.use('/activity-log', activityLogRouter);
 // Notifications endpoints
 v2Router.use('/notification', notificationRouter);
 v2Router.use('/notifications', notificationRouter);
+
+// Billing endpoints
+v2Router.use('/billing', billingRouter);
 
 // User profile & management endpoints (/api/v2/user/...)
 

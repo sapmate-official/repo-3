@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
-import type { Prisma } from '@prisma/client';
+import type { NotificationType, Prisma } from '@prisma/client';
 
 const strParam = (val: unknown): string | undefined => {
   if (Array.isArray(val)) {
@@ -445,7 +445,11 @@ export class NotificationController {
 
       const body = req.body as Record<string, unknown>;
       const name = typeof body.name === 'string' ? body.name : '';
-      const type = typeof body.type === 'string' ? body.type : 'IN_APP';
+      const validTypes: NotificationType[] = ['EMAIL', 'PUSH', 'IN_APP'];
+      const type: NotificationType =
+        typeof body.type === 'string' && (validTypes as string[]).includes(body.type)
+          ? (body.type as NotificationType)
+          : 'IN_APP';
       const subject = typeof body.subject === 'string' ? body.subject : undefined;
       const content = typeof body.content === 'string' ? body.content : undefined;
       const variables =

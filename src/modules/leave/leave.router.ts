@@ -102,14 +102,20 @@ leaveRequestRouter.get(
 leaveRequestRouter.post(
   '/approve/:id',
   requireOrgScope(),
-  requirePermission(PERMISSION_KEYS.leaveApprove),
+  requireAnyPermission(
+    [PERMISSION_KEYS.leaveApprove, PERMISSION_KEYS.leaveSubordinatesView],
+    ['Org_Admin', 'Manager', 'Admin']
+  ),
   LeaveRequestController.approve
 );
 
 leaveRequestRouter.post(
   '/reject/:id',
   requireOrgScope(),
-  requirePermission(PERMISSION_KEYS.leaveReject),
+  requireAnyPermission(
+    [PERMISSION_KEYS.leaveReject, PERMISSION_KEYS.leaveSubordinatesView],
+    ['Org_Admin', 'Manager', 'Admin']
+  ),
   LeaveRequestController.reject
 );
 

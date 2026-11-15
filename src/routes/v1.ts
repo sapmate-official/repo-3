@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { authenticateAny } from '../middleware/auth.js';
 import { requireOrgScope } from '../middleware/requireOrgScope.js';
-import { requirePermission } from '../middleware/requirePermission.js';
+import {
+  requireAnyPermission,
+  requirePermission
+} from '../middleware/requirePermission.js';
 import { PERMISSION_KEYS } from '../modules/auth/permissionKeys.js';
 import { authRouter } from '../modules/auth/auth.router.js';
 import { organizationRouter } from '../modules/organization/organization.router.js';
@@ -14,6 +17,11 @@ import { roleRouter } from '../modules/role/role.router.js';
 import { permissionRouter } from '../modules/permission/permission.router.js';
 import attendanceRouter from '../modules/attendance/attendance.router.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
+import {
+  LeaveBalanceController,
+  LeaveRequestController,
+  LeaveTypeController
+} from '../modules/leave/leave.controller.js';
 
 export const v1Router = Router();
 
@@ -62,6 +70,69 @@ v1Router.post(
   requireOrgScope(),
   requirePermission(PERMISSION_KEYS.userWrite),
   EmployeeController.create
+);
+
+// Legacy v1 leave endpoints for complete backwards compatibility
+v1Router.get(
+  '/leave/type',
+  authenticateAny,
+  requireOrgScope(),
+  LeaveTypeController.list
+);
+v1Router.post(
+  '/manager/leave-type/create',
+  authenticateAny,
+  requireOrgScope(),
+  requirePermission(PERMISSION_KEYS.leaveTypeCreate),
+  LeaveTypeController.create
+);
+v1Router.get(
+  '/manager/list-of-leave',
+  authenticateAny,
+  requireOrgScope(),
+  requireAnyPermission(
+    [
+      PERMISSION_KEYS.leaveSubordinatesView,
+      PERMISSION_KEYS.leaveAllView,
+      PERMISSION_KEYS.leaveApprove,
+      PERMISSION_KEYS.leaveReject
+    ],
+    ['Org_Admin', 'Manager', 'Admin']
+  ),
+  LeaveRequestController.listByManager
+);
+v1Router.get(
+  '/employee/list-of-leave',
+  authenticateAny,
+  requireOrgScope(),
+  LeaveRequestController.listByUser
+);
+v1Router.post(
+  '/employee/leave/apply',
+  authenticateAny,
+  requireOrgScope(),
+  requirePermission(PERMISSION_KEYS.leaveRequestCreate),
+  LeaveRequestController.create
+);
+v1Router.post(
+  '/manager/respond-leave',
+  authenticateAny,
+  requireOrgScope(),
+  requireAnyPermission(
+    [
+      PERMISSION_KEYS.leaveApprove,
+      PERMISSION_KEYS.leaveReject,
+      PERMISSION_KEYS.leaveSubordinatesView
+    ],
+    ['Org_Admin', 'Manager', 'Admin']
+  ),
+  LeaveRequestController.respondLegacy
+);
+v1Router.get(
+  '/employee/leave-balance',
+  authenticateAny,
+  requireOrgScope(),
+  LeaveBalanceController.listByUser
 );
 
 export default v1Router;

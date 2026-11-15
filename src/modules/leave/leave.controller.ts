@@ -200,7 +200,7 @@ export class LeaveRequestController {
   static async listByUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actor = getActor(req);
-      const userId = strParam(req.params.id);
+      const userId = strParam(req.params.id) ?? strParam(req.params.userId) ?? req.user?.id;
       if (!userId) {
         throw new AppError('User ID is required', 400, 'USER_ID_REQUIRED');
       }
@@ -219,7 +219,7 @@ export class LeaveRequestController {
   static async listByManager(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actor = getActor(req);
-      const managerId = strParam(req.params.id);
+      const managerId = strParam(req.params.id) ?? strParam(req.params.managerId) ?? req.user?.id;
       if (!managerId) {
         throw new AppError('Manager ID is required', 400, 'MANAGER_ID_REQUIRED');
       }
@@ -230,6 +230,57 @@ export class LeaveRequestController {
         managerId
       );
       res.status(200).json(requests);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async respondLegacy(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actor = getActor(req);
+      const body = req.body as Record<string, unknown> | undefined;
+      const id =
+        strParam(body?.leaveRequestId) ??
+        strParam(body?.leaveId) ??
+        strParam(body?.id) ??
+        strParam(req.params.id);
+      if (!id) {
+        throw new AppError('Leave request ID is required', 400, 'LEAVE_REQUEST_ID_REQUIRED');
+      }
+
+      const status = typeof body?.status === 'string' ? body.status.toUpperCase() : '';
+      if (status === 'APPROVED' || status === 'APPROVE') {
+        const result = await LeaveService.approveLeaveRequest(
+          actor,
+          requestedOrgId(req),
+          id
+        );
+        res.status(200).json(result);
+        return;
+      }
+
+      if (status === 'REJECTED' || status === 'REJECT') {
+        const reason =
+          typeof body?.rejectedReason === 'string' && body.rejectedReason.trim()
+            ? body.rejectedReason.trim()
+            : typeof body?.reason === 'string' && body.reason.trim()
+              ? body.reason.trim()
+              : 'Rejected by manager';
+        const result = await LeaveService.rejectLeaveRequest(
+          actor,
+          requestedOrgId(req),
+          id,
+          reason
+        );
+        res.status(200).json(result);
+        return;
+      }
+
+      throw new AppError(
+        'Status must be Approved or Rejected',
+        400,
+        'INVALID_LEAVE_STATUS'
+      );
     } catch (error) {
       next(error);
     }
@@ -329,7 +380,10 @@ export class LeaveBalanceController {
   static async listByUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actor = getActor(req);
-      const userId = strParam(req.params.userId);
+      const userId =
+        strParam(req.params.userId) ??
+        strParam(req.params.id) ??
+        req.user?.id;
       if (!userId) {
         throw new AppError('User ID is required', 400, 'USER_ID_REQUIRED');
       }

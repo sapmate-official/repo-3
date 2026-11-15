@@ -460,4 +460,69 @@ export class EmailService {
       });
     }
   }
+
+  static async sendBillingInvoiceEmail(params: {
+    to: string;
+    orgName: string;
+    month: number;
+    year: number;
+    totalAmount: number;
+    activeUserCount: number;
+    pricePerUser: number;
+    dueDate: Date;
+    subscriptionPlan: string;
+  }): Promise<boolean> {
+    const safeOrgName = escapeHtml(params.orgName);
+    const safePlan = escapeHtml(params.subscriptionPlan);
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthName = monthNames[params.month - 1] ?? `Month ${params.month}`;
+    const formattedDueDate = params.dueDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #e9ecef;">
+          <h2 style="color: #1a1a1a; margin-top: 0;">Invoice for ${monthName} ${params.year}</h2>
+          <p style="color: #495057;">Dear Administrator of <strong>${safeOrgName}</strong>,</p>
+          <p style="color: #495057;">Your subscription invoice for <strong>${monthName} ${params.year}</strong> is ready.</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: white; border-radius: 6px; overflow: hidden; border: 1px solid #dee2e6;">
+            <tr style="background: #f1f3f5; border-bottom: 2px solid #dee2e6;">
+              <th style="padding: 10px; text-align: left;">Item</th>
+              <th style="padding: 10px; text-align: right;">Amount</th>
+            </tr>
+            <tr style="border-bottom: 1px solid #dee2e6;">
+              <td style="padding: 10px;">Subscription Plan (${safePlan})</td>
+              <td style="padding: 10px; text-align: right;">$${params.pricePerUser.toFixed(2)} / user</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dee2e6;">
+              <td style="padding: 10px;">Active Users</td>
+              <td style="padding: 10px; text-align: right;">${params.activeUserCount}</td>
+            </tr>
+            <tr style="background: #f8f9fa; font-weight: bold;">
+              <td style="padding: 12px; font-size: 16px;">Total Due</td>
+              <td style="padding: 12px; text-align: right; font-size: 16px; color: #2b8a3e;">$${params.totalAmount.toFixed(2)}</td>
+            </tr>
+          </table>
+
+          <p style="color: #e03131; font-weight: 500;">Due Date: ${formattedDueDate}</p>
+          <p style="color: #6c757d; font-size: 13px; margin-top: 20px;">
+            Thank you for choosing Alkaa Workforce OS. If you have any billing inquiries, please contact our support team.
+          </p>
+        </div>
+      </div>
+    `;
+
+    return this.sendEmail({
+      to: [{ email: params.to, name: params.orgName }],
+      subject: sanitizeHeaderValue(`Invoice for ${monthName} ${params.year} - ${params.orgName}`),
+      htmlContent
+    });
+  }
 }

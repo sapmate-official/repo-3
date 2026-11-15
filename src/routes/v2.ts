@@ -32,6 +32,8 @@ import { eventsRouter } from '../modules/events/events.router.js';
 import { notificationRouter } from '../modules/notifications/notification.router.js';
 import { billingRouter } from '../modules/billing/billing.router.js';
 import { payrollV2Router, salaryV2Router } from '../modules/payroll/payroll.router.js';
+import { superAdminRouter } from '../modules/super-admin/super-admin.router.js';
+import { subscriptionPlanRouter } from '../modules/subscription-plan/subscription-plan.router.js';
 import { UserRoleController } from '../modules/role/userRole.controller.js';
 import { EmployeeController } from '../modules/employee/employee.controller.js';
 
@@ -147,6 +149,14 @@ v2Router.use('/billing', billingRouter);
 // Payroll & Salary legacy compatibility endpoints
 v2Router.use('/payroll', payrollV2Router);
 v2Router.use('/salary', salaryV2Router);
+
+// SuperAdmin endpoints
+v2Router.use('/super-admin', superAdminRouter);
+v2Router.use('/superAdmin', superAdminRouter);
+
+// Subscription Plan endpoints
+v2Router.use('/subscription-plan', subscriptionPlanRouter);
+v2Router.use('/subscription-plans', subscriptionPlanRouter);
 
 // User profile & management endpoints (/api/v2/user/...)
 

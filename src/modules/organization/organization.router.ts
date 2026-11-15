@@ -6,6 +6,7 @@ import { requirePermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import { OrganizationController } from './organization.controller.js';
 import { OrganizationChartController } from './organization.chart.controller.js';
+import { SubscriptionPlanController } from '../subscription-plan/subscription-plan.controller.js';
 import {
   adminParamsSchema,
   createOrganizationSchema,
@@ -48,6 +49,9 @@ organizationRouter.post(
   validate({ body: createOrganizationSchema }),
   OrganizationController.create
 );
+
+// Subscription plans list (accessible to organizations and super-admins)
+organizationRouter.get('/subscription-plans', SubscriptionPlanController.getSubscriptionPlans);
 
 // Organization details: accessible to super-admins and members of the organization
 organizationRouter.get(

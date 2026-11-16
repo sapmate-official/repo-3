@@ -506,4 +506,69 @@ export class NotificationController {
       next(error);
     }
   }
+
+  // POST /api/v2/notification/subscription
+  static async saveSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { userId, subscription } = req.body;
+      const targetUserId = userId || req.user?.id;
+      if (!targetUserId || !subscription?.endpoint || !subscription?.keys) {
+        throw new AppError('userId and subscription with endpoint and keys are required', 400, 'BAD_REQUEST');
+      }
+
+      const existingUser = await prisma.user.findUnique({
+        where: { id: targetUserId }
+      });
+      if (!existingUser) {
+        throw new AppError('User not found', 404, 'NOT_FOUND');
+      }
+
+      const existingSubscription = await prisma.pushSubscription.findUnique({
+        where: { endpoint: subscription.endpoint }
+      });
+
+      let saved;
+      if (existingSubscription) {
+        saved = await prisma.pushSubscription.update({
+          where: { endpoint: subscription.endpoint },
+          data: {
+            userId: targetUserId,
+            keys: subscription.keys as Prisma.InputJsonValue,
+            expirationTime: subscription.expirationTime ?? null
+          }
+        });
+      } else {
+        saved = await prisma.pushSubscription.create({
+          data: {
+            userId: targetUserId,
+            endpoint: subscription.endpoint,
+            keys: subscription.keys as Prisma.InputJsonValue,
+            expirationTime: subscription.expirationTime ?? null
+          }
+        });
+      }
+
+      res.status(201).json({ success: true, data: saved });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // DELETE /api/v2/notification/subscription
+  static async deleteSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const endpoint = req.body?.endpoint || (typeof req.query.endpoint === 'string' ? req.query.endpoint : undefined);
+      if (!endpoint) {
+        throw new AppError('Subscription endpoint is required', 400, 'BAD_REQUEST');
+      }
+
+      await prisma.pushSubscription.deleteMany({
+        where: { endpoint }
+      });
+
+      res.status(200).json({ success: true, message: 'Subscription removed successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

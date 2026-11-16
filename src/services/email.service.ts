@@ -525,4 +525,90 @@ export class EmailService {
       htmlContent
     });
   }
+
+  static async sendBirthdayEmail(params: {
+    to: string;
+    employeeName: string;
+    companyName: string;
+    managerEmail?: string;
+  }): Promise<boolean> {
+    const safeName = escapeHtml(params.employeeName);
+    const safeCompany = escapeHtml(params.companyName);
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; color: white;">
+          <h1 style="margin: 0; font-size: 28px;">Happy Birthday, ${safeName}!</h1>
+        </div>
+        <div style="background-color: #ffffff; padding: 25px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
+          <p style="color: #374151; font-size: 16px; line-height: 1.5;">
+            On behalf of everyone at <strong>${safeCompany}</strong>, we wish you a fantastic birthday filled with happiness, success, and good health!
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.5;">
+            Thank you for being a valued member of our team. Enjoy your special day!
+          </p>
+          <p style="color: #6b7280; font-size: 14px; margin-top: 25px;">
+            Warmest regards,<br>
+            <strong>${safeCompany} Team</strong>
+          </p>
+        </div>
+      </div>
+    `;
+
+    const recipients = [{ email: params.to, name: params.employeeName }];
+    if (params.managerEmail) {
+      recipients.push({ email: params.managerEmail, name: 'Manager' });
+    }
+
+    return this.sendEmail({
+      to: recipients,
+      subject: sanitizeHeaderValue(`Happy Birthday, ${params.employeeName}! 🎂`),
+      htmlContent
+    });
+  }
+
+  static async sendCheckoutReminderEmail(params: {
+    to: string;
+    employeeName: string;
+    checkInTime: Date;
+    companyName: string;
+    managerEmail?: string;
+  }): Promise<boolean> {
+    const safeName = escapeHtml(params.employeeName);
+    const safeCompany = escapeHtml(params.companyName);
+    const formattedCheckIn = params.checkInTime.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #fef3c7; padding: 25px; border-radius: 8px; border: 1px solid #fde68a;">
+          <h2 style="color: #92400e; margin-top: 0;">Attendance Checkout Reminder</h2>
+          <p style="color: #4b5563;">Hello <strong>${safeName}</strong>,</p>
+          <p style="color: #4b5563;">
+            Our records indicate that you checked in at <strong>${formattedCheckIn}</strong> today, but have not yet recorded your check-out.
+          </p>
+          <p style="color: #4b5563;">
+            Please ensure you clock out before leaving to maintain accurate attendance logs.
+          </p>
+          <p style="color: #6b7280; font-size: 13px; margin-top: 20px;">
+            Best regards,<br>
+            <strong>${safeCompany} HR Operations</strong>
+          </p>
+        </div>
+      </div>
+    `;
+
+    const recipients = [{ email: params.to, name: params.employeeName }];
+    if (params.managerEmail) {
+      recipients.push({ email: params.managerEmail, name: 'Manager' });
+    }
+
+    return this.sendEmail({
+      to: recipients,
+      subject: sanitizeHeaderValue(`Checkout Reminder - ${params.companyName}`),
+      htmlContent
+    });
+  }
 }

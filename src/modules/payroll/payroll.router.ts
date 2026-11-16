@@ -36,6 +36,8 @@ payrollRouter.get('/download/:salaryRecordId', PayrollCompatController.downloadP
 payrollRouter.get('/download/:id', PayrollCompatController.downloadPayslip);
 payrollRouter.get('/pre-stats/:month/:year/:userId', PayrollCompatController.preStatsSalaryGeneration);
 payrollRouter.get('/pre-stats/:month/:year', PayrollCompatController.preStatsSalaryGeneration);
+payrollRouter.post('/custom/preview', PayrollCompatController.customPayslipPreview);
+payrollRouter.post('/custom/generate', PayrollCompatController.customPayslipGenerate);
 payrollRouter.delete('/payslip/:id', PayrollCompatController.deleteRecord);
 
 // ==========================================

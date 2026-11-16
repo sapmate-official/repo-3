@@ -4,11 +4,13 @@ import { logger } from './config/logger.js';
 import prisma from './db/prisma.js';
 import { closeRedis } from './db/redis.js';
 import { cleanupExpiredSessions } from './modules/auth/authSession.service.js';
+import { startScheduledJobs, stopScheduledJobs } from './jobs/scheduler.js';
 
 const app = createApp();
 
 const server = app.listen(env.PORT, '0.0.0.0', () => {
   logger.info(`Alkaa TypeScript Backend running on port ${env.PORT} in ${env.NODE_ENV} mode`);
+  startScheduledJobs();
 });
 
 const SESSION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -33,6 +35,7 @@ sessionCleanupTimer.unref();
 const gracefulShutdown = (signal: string): void => {
   logger.info(`${signal} received: closing HTTP server and database connections`);
   clearInterval(sessionCleanupTimer);
+  stopScheduledJobs();
   server.close(() => {
     void (async () => {
       try {

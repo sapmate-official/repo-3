@@ -43,3 +43,7 @@ notificationRouter.delete('/:id', NotificationController.delete);
 // Base notification routes
 notificationRouter.get('/', NotificationController.list);
 notificationRouter.post('/', NotificationController.create);
+
+// Push subscription endpoints (accessible to authenticated users)
+notificationRouter.post('/subscription', NotificationController.saveSubscription);
+notificationRouter.delete('/subscription', NotificationController.deleteSubscription);

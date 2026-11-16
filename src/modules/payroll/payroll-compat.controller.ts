@@ -773,48 +773,229 @@ export class PayrollCompatController {
       const recordId = strParam(req.params.salaryRecordId) ?? strParam(req.params.id);
       if (!recordId) throw new AppError('Record ID required', 400, 'BAD_REQUEST');
 
-      const payslip = await prisma.payslipRecord.findUnique({
+      type DetailedPayslip = Prisma.PayslipRecordGetPayload<{
+        include: {
+          employee: { select: { id: true; firstName: true; lastName: true; email: true } };
+          run: { include: { organization: true } };
+          lineItems: true;
+        };
+      }>;
+
+      let payslip: DetailedPayslip | null = null;
+      try {
+        payslip = await prisma.payslipRecord.findUnique({
+          where: { id: recordId },
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true, email: true } },
+            run: { include: { organization: true } },
+            lineItems: true
+          }
+        });
+      } catch (err: unknown) {
+        const error = err as { code?: string };
+        if (error.code !== 'P2021') {
+          throw err;
+        }
+      }
+
+      if (payslip) {
+        const monthName = new Date(payslip.run.year, payslip.run.month - 1).toLocaleString('default', {
+          month: 'long'
+        });
+
+        const fullName = `${payslip.employee.firstName ?? ''} ${payslip.employee.lastName ?? ''}`.trim() || payslip.employee.email;
+
+        const pdfBuffer = createPayslipPdfBuffer({
+          payslipId: payslip.id,
+          orgName: payslip.run.organization.name,
+          employeeName: fullName,
+          employeeEmail: payslip.employee.email,
+          monthName,
+          year: payslip.run.year,
+          workingDays: payslip.workingDays,
+          presentDays: payslip.presentDays,
+          lopDays: payslip.lopDays,
+          grossEarnings: payslip.grossEarnings,
+          totalDeductions: payslip.totalDeductions,
+          netPay: payslip.netPay,
+          lineItems: payslip.lineItems.map((item) => ({
+            componentCode: item.componentCode,
+            category: item.category,
+            finalAmount: item.finalAmount
+          }))
+        });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="payslip-${payslip.run.year}-${payslip.run.month}.pdf"`);
+        res.status(200).send(pdfBuffer);
+        return;
+      }
+
+      // Fallback to legacy SalaryRecord
+      const legacy = await prisma.salaryRecord.findUnique({
         where: { id: recordId },
         include: {
-          employee: { select: { id: true, firstName: true, lastName: true, email: true } },
-          run: { include: { organization: true } },
-          lineItems: true
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              organization: { select: { name: true } }
+            }
+          }
         }
       });
 
-      if (!payslip) {
+      if (!legacy) {
         throw new AppError('Payslip record not found', 404, 'NOT_FOUND');
       }
 
-      const monthName = new Date(payslip.run.year, payslip.run.month - 1).toLocaleString('default', {
+      const monthName = new Date(legacy.year, legacy.month - 1).toLocaleString('default', {
         month: 'long'
       });
 
-      const fullName = `${payslip.employee.firstName ?? ''} ${payslip.employee.lastName ?? ''}`.trim() || payslip.employee.email;
+      const fullName = `${legacy.user.firstName ?? ''} ${legacy.user.lastName ?? ''}`.trim() || legacy.user.email;
+      const orgName = legacy.user.organization?.name ?? 'ShapeNXT';
+
+      const lineItems: { componentCode: string; category: string; finalAmount: number }[] = [
+        { componentCode: 'BASIC', category: 'EARNING', finalAmount: legacy.basicSalary }
+      ];
+
+      let grossEarnings = legacy.basicSalary;
+      if (legacy.allowances && typeof legacy.allowances === 'object') {
+        for (const [code, amount] of Object.entries(legacy.allowances as Record<string, number>)) {
+          const num = typeof amount === 'number' ? amount : parseFloat(String(amount) || '0');
+          if (num > 0) {
+            lineItems.push({ componentCode: code.toUpperCase(), category: 'EARNING', finalAmount: num });
+            grossEarnings += num;
+          }
+        }
+      }
+
+      let totalDeductions = 0;
+      if (legacy.deductions && typeof legacy.deductions === 'object') {
+        for (const [code, amount] of Object.entries(legacy.deductions as Record<string, number>)) {
+          const num = typeof amount === 'number' ? amount : parseFloat(String(amount) || '0');
+          if (num > 0) {
+            lineItems.push({ componentCode: code.toUpperCase(), category: 'DEDUCTION', finalAmount: num });
+            totalDeductions += num;
+          }
+        }
+      }
 
       const pdfBuffer = createPayslipPdfBuffer({
-        payslipId: payslip.id,
-        orgName: payslip.run.organization.name,
+        payslipId: legacy.id,
+        orgName,
         employeeName: fullName,
-        employeeEmail: payslip.employee.email,
+        employeeEmail: legacy.user.email,
         monthName,
-        year: payslip.run.year,
-        workingDays: payslip.workingDays,
-        presentDays: payslip.presentDays,
-        lopDays: payslip.lopDays,
-        grossEarnings: payslip.grossEarnings,
-        totalDeductions: payslip.totalDeductions,
-        netPay: payslip.netPay,
-        lineItems: payslip.lineItems.map((item) => ({
-          componentCode: item.componentCode,
-          category: item.category,
-          finalAmount: item.finalAmount
-        }))
+        year: legacy.year,
+        workingDays: 22,
+        presentDays: 22,
+        lopDays: 0,
+        grossEarnings,
+        totalDeductions,
+        netPay: legacy.netSalary,
+        lineItems
       });
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="payslip-${payslip.run.year}-${payslip.run.month}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="payslip-${legacy.year}-${legacy.month}.pdf"`);
       res.status(200).send(pdfBuffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /api/v3/payroll/custom/preview
+  static async customPayslipPreview(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { userId, month, year, basicSalary, allowances, deductions } = req.body;
+      const targetUserId = userId || req.user?.id;
+      if (!targetUserId) throw new AppError('User ID is required', 400, 'BAD_REQUEST');
+
+      const numBasic = Number(basicSalary) || 0;
+      const parsedAllowances: Record<string, number> = allowances && typeof allowances === 'object' ? allowances : {};
+      const parsedDeductions: Record<string, number> = deductions && typeof deductions === 'object' ? deductions : {};
+
+      const totalAllowances = Object.values(parsedAllowances).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const totalDeductions = Object.values(parsedDeductions).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const grossEarnings = numBasic + totalAllowances;
+      const netPay = Math.max(0, grossEarnings - totalDeductions);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          userId: targetUserId,
+          month: Number(month) || new Date().getMonth() + 1,
+          year: Number(year) || new Date().getFullYear(),
+          basicSalary: numBasic,
+          grossEarnings,
+          totalAllowances,
+          totalDeductions,
+          netSalary: netPay,
+          allowances: parsedAllowances,
+          deductions: parsedDeductions
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /api/v3/payroll/custom/generate
+  static async customPayslipGenerate(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { userId, month, year, basicSalary, allowances, deductions, remarks } = req.body;
+      const targetUserId = userId || req.user?.id;
+      if (!targetUserId) throw new AppError('User ID is required', 400, 'BAD_REQUEST');
+
+      const targetMonth = Number(month) || new Date().getMonth() + 1;
+      const targetYear = Number(year) || new Date().getFullYear();
+      const numBasic = Number(basicSalary) || 0;
+      const parsedAllowances: Record<string, number> = allowances && typeof allowances === 'object' ? allowances : {};
+      const parsedDeductions: Record<string, number> = deductions && typeof deductions === 'object' ? deductions : {};
+
+      const totalAllowances = Object.values(parsedAllowances).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const totalDeductions = Object.values(parsedDeductions).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const grossEarnings = numBasic + totalAllowances;
+      const netPay = Math.max(0, grossEarnings - totalDeductions);
+
+      // Upsert into legacy SalaryRecord
+      const record = await prisma.salaryRecord.upsert({
+        where: {
+          userId_month_year: {
+            userId: targetUserId,
+            month: targetMonth,
+            year: targetYear
+          }
+        },
+        create: {
+          userId: targetUserId,
+          month: targetMonth,
+          year: targetYear,
+          basicSalary: numBasic,
+          netSalary: netPay,
+          allowances: parsedAllowances as Prisma.InputJsonValue,
+          deductions: parsedDeductions as Prisma.InputJsonValue,
+          remarks: remarks || 'Custom payslip generated',
+          status: 'PENDING'
+        },
+        update: {
+          basicSalary: numBasic,
+          netSalary: netPay,
+          allowances: parsedAllowances as Prisma.InputJsonValue,
+          deductions: parsedDeductions as Prisma.InputJsonValue,
+          remarks: remarks || 'Custom payslip generated'
+        }
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Custom payslip generated successfully',
+        data: record
+      });
     } catch (error) {
       next(error);
     }

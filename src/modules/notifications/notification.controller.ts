@@ -80,6 +80,15 @@ async function getOrCreateDefaultTemplate(orgId: string): Promise<string> {
   return created.id;
 }
 
+interface PushSubscriptionPayload {
+  userId?: string;
+  subscription?: {
+    endpoint?: string;
+    expirationTime?: number | null;
+    keys?: Record<string, unknown>;
+  };
+}
+
 export class NotificationController {
   // GET /api/v2/notification
   static async list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -510,9 +519,13 @@ export class NotificationController {
   // POST /api/v2/notification/subscription
   static async saveSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { userId, subscription } = req.body;
-      const targetUserId = userId || req.user?.id;
-      if (!targetUserId || !subscription?.endpoint || !subscription?.keys) {
+      const body = req.body as PushSubscriptionPayload | undefined;
+      const targetUserId = body?.userId ?? req.user?.id;
+      const endpoint = body?.subscription?.endpoint;
+      const keys = body?.subscription?.keys;
+      const expirationTime = body?.subscription?.expirationTime ?? null;
+
+      if (!targetUserId || !endpoint || !keys) {
         throw new AppError('userId and subscription with endpoint and keys are required', 400, 'BAD_REQUEST');
       }
 
@@ -524,26 +537,26 @@ export class NotificationController {
       }
 
       const existingSubscription = await prisma.pushSubscription.findUnique({
-        where: { endpoint: subscription.endpoint }
+        where: { endpoint }
       });
 
       let saved;
       if (existingSubscription) {
         saved = await prisma.pushSubscription.update({
-          where: { endpoint: subscription.endpoint },
+          where: { endpoint },
           data: {
             userId: targetUserId,
-            keys: subscription.keys as Prisma.InputJsonValue,
-            expirationTime: subscription.expirationTime ?? null
+            keys: keys as Prisma.InputJsonValue,
+            expirationTime
           }
         });
       } else {
         saved = await prisma.pushSubscription.create({
           data: {
             userId: targetUserId,
-            endpoint: subscription.endpoint,
-            keys: subscription.keys as Prisma.InputJsonValue,
-            expirationTime: subscription.expirationTime ?? null
+            endpoint,
+            keys: keys as Prisma.InputJsonValue,
+            expirationTime
           }
         });
       }
@@ -557,7 +570,8 @@ export class NotificationController {
   // DELETE /api/v2/notification/subscription
   static async deleteSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const endpoint = req.body?.endpoint || (typeof req.query.endpoint === 'string' ? req.query.endpoint : undefined);
+      const body = req.body as { endpoint?: string } | undefined;
+      const endpoint = body?.endpoint ?? (typeof req.query.endpoint === 'string' ? req.query.endpoint : undefined);
       if (!endpoint) {
         throw new AppError('Subscription endpoint is required', 400, 'BAD_REQUEST');
       }

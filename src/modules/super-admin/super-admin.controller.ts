@@ -112,7 +112,7 @@ export class SuperAdminController {
   }
 
   // GET /api/v2/super-admin/validate-token
-  static async validateToken(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static validateToken(req: Request, res: Response, next: NextFunction): void {
     try {
       if (!req.superAdmin) {
         throw new AppError('Super admin authentication required', 401, 'UNAUTHORIZED');
@@ -229,7 +229,7 @@ export class SuperAdminController {
       const { email, name, password, secretKey } = parsedBody.data;
 
       // Allow if request is already from authenticated super admin or secretKey matches
-      const expectedSecret = process.env.SUPER_ADMIN_SECRET_KEY || 'superadmin_master_key_2026';
+      const expectedSecret = process.env.SUPER_ADMIN_SECRET_KEY ?? 'superadmin_master_key_2026';
       if (!req.superAdmin && secretKey !== expectedSecret) {
         throw new AppError('Unauthorized: valid secret key or super-admin token required', 401, 'UNAUTHORIZED');
       }
@@ -764,17 +764,19 @@ export class SuperAdminController {
       });
       if (!org) throw new AppError('Organization not found', 404, 'NOT_FOUND');
 
-      let bill = billId
+      const bill = billId
         ? await prisma.billingRecord.findUnique({ where: { id: billId } })
-        : await prisma.billingRecord.findUnique({
-            where: {
-              organizationId_month_year: {
-                organizationId: id,
-                month: month!,
-                year: year!
+        : (month !== undefined && year !== undefined
+          ? await prisma.billingRecord.findUnique({
+              where: {
+                organizationId_month_year: {
+                  organizationId: id,
+                  month,
+                  year
+                }
               }
-            }
-          });
+            })
+          : null);
 
       if (!bill) {
         throw new AppError('Bill not found for this organization and billing period', 404, 'NOT_FOUND');
@@ -958,7 +960,7 @@ export class SuperAdminController {
       if (!existingBill) throw new AppError('Bill not found', 404, 'NOT_FOUND');
 
       const updateData: Prisma.BillingRecordUpdateInput = {
-        status: status as BillingStatus
+        status
       };
       if (status === 'PAID') {
         updateData.paidDate = new Date();

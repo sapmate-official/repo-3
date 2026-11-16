@@ -155,13 +155,13 @@ describe('SuperAdminController Comprehensive Suite', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
-    it('validates current super admin session token', async () => {
+    it('validates current super admin session token', () => {
       const req = {
         superAdmin: { id: 'sa-1', email: 'admin@alkaa.online', name: 'Master', isSuperAdmin: true }
       } as unknown as Request;
       const res = mockRes();
 
-      await SuperAdminController.validateToken(req, res, next);
+      SuperAdminController.validateToken(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(
@@ -349,10 +349,11 @@ describe('SuperAdminController Comprehensive Suite', () => {
       await SuperAdminController.getOrganizationsStats(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(200);
-      const jsonCalls = (res.json as any).mock.calls[0][0];
+      const jsonCalls = vi.mocked(res.json).mock.calls[0]?.[0] as { subscriptionStatus: string }[] | undefined;
+      expect(jsonCalls).toBeDefined();
       expect(jsonCalls).toHaveLength(2);
-      expect(jsonCalls[0].subscriptionStatus).toBe('Active');
-      expect(jsonCalls[1].subscriptionStatus).toBe('Expired');
+      expect(jsonCalls?.[0]?.subscriptionStatus).toBe('Active');
+      expect(jsonCalls?.[1]?.subscriptionStatus).toBe('Expired');
     });
 
     it('returns detailed organization breakdown', async () => {
@@ -435,9 +436,10 @@ describe('SuperAdminController Comprehensive Suite', () => {
       await SuperAdminController.getOrganizationAdmins(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(200);
-      const admins = (res.json as any).mock.calls[0][0];
+      const admins = vi.mocked(res.json).mock.calls[0]?.[0] as { roles: { name: string }[] }[] | undefined;
+      expect(admins).toBeDefined();
       expect(admins).toHaveLength(1);
-      expect(admins[0].roles[0].name).toBe('Org_Admin');
+      expect(admins?.[0]?.roles[0]?.name).toBe('Org_Admin');
     });
   });
 
@@ -617,7 +619,7 @@ describe('SuperAdminController Comprehensive Suite', () => {
     });
 
     it('aggregates platform billing statistics', async () => {
-      prismaMock.billingRecord.findMany.mockImplementation((args: any) => {
+      prismaMock.billingRecord.findMany.mockImplementation((args: { select?: { organizationId?: boolean } } | undefined) => {
         if (args?.select?.organizationId) {
           // pendingBills
           return Promise.resolve([
@@ -631,7 +633,7 @@ describe('SuperAdminController Comprehensive Suite', () => {
         ]);
       });
 
-      prismaMock.billingRecord.count.mockImplementation((args: any) => {
+      prismaMock.billingRecord.count.mockImplementation((args: { where?: { status?: string } } | undefined) => {
         if (args?.where?.status === 'PAID') return Promise.resolve(10);
         if (args?.where?.status === 'UNPAID') return Promise.resolve(5);
         if (args?.where?.status === 'OVERDUE') return Promise.resolve(1);

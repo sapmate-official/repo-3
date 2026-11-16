@@ -24,16 +24,17 @@ async function runPhase4Verification() {
   const departments = await DepartmentService.listDepartments(orgId);
   console.log(`✓ Departments listed: count = ${departments.length}`);
 
-  let testDept: any = departments[0];
-  if (!testDept) {
-    testDept = await DepartmentService.createDepartment(orgId, {
-      name: 'Engineering QA',
-      code: 'ENG-QA',
-      description: 'Test Department'
-    });
-    console.log(`✓ Created test department: ${testDept.name}`);
-  } else {
+  const existingDept = departments[0];
+  const testDept = existingDept ?? (await DepartmentService.createDepartment(orgId, {
+    name: 'Engineering QA',
+    code: 'ENG-QA',
+    description: 'Test Department'
+  }));
+
+  if (existingDept) {
     console.log(`✓ Using existing department: ${testDept.name} (${testDept.id})`);
+  } else {
+    console.log(`✓ Created test department: ${testDept.name}`);
   }
 
   // 3. Test Employee Service
@@ -46,8 +47,8 @@ async function runPhase4Verification() {
   });
   console.log(`✓ Employee pagination working: total = ${employeeResult.pagination.total}, returned = ${employeeResult.data.length}`);
 
-  if (employeeResult.data.length > 0) {
-    const firstEmp: any = employeeResult.data[0];
+  if (employeeResult.data.length > 0 && employeeResult.data[0]) {
+    const firstEmp = employeeResult.data[0];
     const fullProfile = await EmployeeService.getEmployeeById(orgId, firstEmp.id);
     console.log(`✓ 7-tab Employee Profile fetched successfully for: ${fullProfile.name} (Role: ${fullProfile.roles?.[0]?.role?.name})`);
   }

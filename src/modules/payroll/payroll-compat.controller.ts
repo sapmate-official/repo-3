@@ -13,6 +13,17 @@ const strParam = (val: unknown): string | undefined => {
   return typeof val === 'string' && val.trim() ? val.trim() : undefined;
 };
 
+const parseNumber = (val: unknown, fallback = 0): number => {
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : fallback;
+  }
+  if (typeof val === 'string') {
+    const parsed = parseFloat(val);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
+
 interface FormattedEmployee {
   firstName?: string;
   lastName?: string;
@@ -24,6 +35,16 @@ interface FormattedEmployee {
     bankName: string;
     ifscCode: string;
   };
+}
+
+interface CustomPayslipPayload {
+  userId?: string;
+  month?: number | string;
+  year?: number | string;
+  basicSalary?: number | string;
+  allowances?: Record<string, number | string>;
+  deductions?: Record<string, number | string>;
+  remarks?: string;
 }
 
 export class PayrollCompatController {
@@ -909,27 +930,43 @@ export class PayrollCompatController {
   }
 
   // POST /api/v3/payroll/custom/preview
-  static async customPayslipPreview(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static customPayslipPreview(req: Request, res: Response, next: NextFunction): void {
     try {
-      const { userId, month, year, basicSalary, allowances, deductions } = req.body;
-      const targetUserId = userId || req.user?.id;
+      const body = req.body as CustomPayslipPayload | undefined;
+      const targetUserId = body?.userId ?? req.user?.id;
       if (!targetUserId) throw new AppError('User ID is required', 400, 'BAD_REQUEST');
 
-      const numBasic = Number(basicSalary) || 0;
-      const parsedAllowances: Record<string, number> = allowances && typeof allowances === 'object' ? allowances : {};
-      const parsedDeductions: Record<string, number> = deductions && typeof deductions === 'object' ? deductions : {};
+      const numBasic = parseNumber(body?.basicSalary, 0);
+      const parsedAllowances: Record<string, number> = {};
+      if (body?.allowances && typeof body.allowances === 'object') {
+        for (const [k, v] of Object.entries(body.allowances)) {
+          const num = parseNumber(v, 0);
+          if (num > 0) parsedAllowances[k] = num;
+        }
+      }
 
-      const totalAllowances = Object.values(parsedAllowances).reduce((sum, v) => sum + (Number(v) || 0), 0);
-      const totalDeductions = Object.values(parsedDeductions).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const parsedDeductions: Record<string, number> = {};
+      if (body?.deductions && typeof body.deductions === 'object') {
+        for (const [k, v] of Object.entries(body.deductions)) {
+          const num = parseNumber(v, 0);
+          if (num > 0) parsedDeductions[k] = num;
+        }
+      }
+
+      const totalAllowances = Object.values(parsedAllowances).reduce((sum, v) => sum + v, 0);
+      const totalDeductions = Object.values(parsedDeductions).reduce((sum, v) => sum + v, 0);
       const grossEarnings = numBasic + totalAllowances;
       const netPay = Math.max(0, grossEarnings - totalDeductions);
+
+      const targetMonth = parseNumber(body?.month, new Date().getMonth() + 1);
+      const targetYear = parseNumber(body?.year, new Date().getFullYear());
 
       res.status(200).json({
         success: true,
         data: {
           userId: targetUserId,
-          month: Number(month) || new Date().getMonth() + 1,
-          year: Number(year) || new Date().getFullYear(),
+          month: targetMonth,
+          year: targetYear,
           basicSalary: numBasic,
           grossEarnings,
           totalAllowances,
@@ -947,20 +984,35 @@ export class PayrollCompatController {
   // POST /api/v3/payroll/custom/generate
   static async customPayslipGenerate(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { userId, month, year, basicSalary, allowances, deductions, remarks } = req.body;
-      const targetUserId = userId || req.user?.id;
+      const body = req.body as CustomPayslipPayload | undefined;
+      const targetUserId = body?.userId ?? req.user?.id;
       if (!targetUserId) throw new AppError('User ID is required', 400, 'BAD_REQUEST');
 
-      const targetMonth = Number(month) || new Date().getMonth() + 1;
-      const targetYear = Number(year) || new Date().getFullYear();
-      const numBasic = Number(basicSalary) || 0;
-      const parsedAllowances: Record<string, number> = allowances && typeof allowances === 'object' ? allowances : {};
-      const parsedDeductions: Record<string, number> = deductions && typeof deductions === 'object' ? deductions : {};
+      const targetMonth = parseNumber(body?.month, new Date().getMonth() + 1);
+      const targetYear = parseNumber(body?.year, new Date().getFullYear());
+      const numBasic = parseNumber(body?.basicSalary, 0);
 
-      const totalAllowances = Object.values(parsedAllowances).reduce((sum, v) => sum + (Number(v) || 0), 0);
-      const totalDeductions = Object.values(parsedDeductions).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const parsedAllowances: Record<string, number> = {};
+      if (body?.allowances && typeof body.allowances === 'object') {
+        for (const [k, v] of Object.entries(body.allowances)) {
+          const num = parseNumber(v, 0);
+          if (num > 0) parsedAllowances[k] = num;
+        }
+      }
+
+      const parsedDeductions: Record<string, number> = {};
+      if (body?.deductions && typeof body.deductions === 'object') {
+        for (const [k, v] of Object.entries(body.deductions)) {
+          const num = parseNumber(v, 0);
+          if (num > 0) parsedDeductions[k] = num;
+        }
+      }
+
+      const totalAllowances = Object.values(parsedAllowances).reduce((sum, v) => sum + v, 0);
+      const totalDeductions = Object.values(parsedDeductions).reduce((sum, v) => sum + v, 0);
       const grossEarnings = numBasic + totalAllowances;
       const netPay = Math.max(0, grossEarnings - totalDeductions);
+      const remarks = body?.remarks ?? 'Custom payslip generated';
 
       // Upsert into legacy SalaryRecord
       const record = await prisma.salaryRecord.upsert({
@@ -977,17 +1029,17 @@ export class PayrollCompatController {
           year: targetYear,
           basicSalary: numBasic,
           netSalary: netPay,
-          allowances: parsedAllowances as Prisma.InputJsonValue,
-          deductions: parsedDeductions as Prisma.InputJsonValue,
-          remarks: remarks || 'Custom payslip generated',
+          allowances: parsedAllowances,
+          deductions: parsedDeductions,
+          remarks,
           status: 'PENDING'
         },
         update: {
           basicSalary: numBasic,
           netSalary: netPay,
-          allowances: parsedAllowances as Prisma.InputJsonValue,
-          deductions: parsedDeductions as Prisma.InputJsonValue,
-          remarks: remarks || 'Custom payslip generated'
+          allowances: parsedAllowances,
+          deductions: parsedDeductions,
+          remarks
         }
       });
 

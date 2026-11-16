@@ -4,8 +4,7 @@ import { AppError } from '../../util/errors.js';
 import type { Prisma } from '@prisma/client';
 import {
   createSubscriptionPlanSchema,
-  updateSubscriptionPlanSchema,
-  planIdParamsSchema
+  updateSubscriptionPlanSchema
 } from './subscription-plan.schema.js';
 
 const strParam = (val: unknown): string | undefined => {
@@ -94,7 +93,7 @@ export class SubscriptionPlanController {
           monthlyPrice,
           annualPrice,
           maxUsers,
-          features: (features ?? undefined) as Prisma.InputJsonValue | undefined,
+          features: features ?? undefined,
           isActive: isActive ?? true
         }
       });

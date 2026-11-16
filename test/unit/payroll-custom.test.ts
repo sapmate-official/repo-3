@@ -35,7 +35,7 @@ describe('PayrollCompatController - Custom & Download', () => {
   const next: NextFunction = vi.fn();
 
   describe('customPayslipPreview', () => {
-    it('calculates gross, deductions, and net salary correctly', async () => {
+    it('calculates gross, deductions, and net salary correctly', () => {
       const req = {
         body: {
           userId: 'user-123',
@@ -48,7 +48,7 @@ describe('PayrollCompatController - Custom & Download', () => {
       } as unknown as Request;
       const res = mockRes();
 
-      await PayrollCompatController.customPayslipPreview(req, res, next);
+      PayrollCompatController.customPayslipPreview(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({

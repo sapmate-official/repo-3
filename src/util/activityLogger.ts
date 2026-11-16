@@ -5,6 +5,7 @@ import { logger } from '../config/logger.js';
 export interface LogActivityParams {
   orgId: string;
   actorId: string;
+  targetId?: string;
   action: ActivityAction;
   entity: ActivityEntity;
   entityId: string;
@@ -20,6 +21,7 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
       data: {
         orgId: params.orgId,
         actorId: params.actorId,
+        targetId: params.targetId ?? null,
         action: params.action,
         entity: params.entity,
         entityId: params.entityId,

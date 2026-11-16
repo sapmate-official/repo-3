@@ -140,7 +140,7 @@ export class EmployeeController {
 
       const employee = await EmployeeService.updateEmployee(orgId, strParam(req.params.id) ?? '', {
         departmentId: strParam(req.params.departmentId) ?? null
-      });
+      }, req.user?.id);
       res.status(200).json(employee);
     } catch (error) {
       next(error);
@@ -203,7 +203,7 @@ export class EmployeeController {
         req.user,
         isSelfIdentifier(req.user, employeeId)
       );
-      const employee = await EmployeeService.updateEmployee(orgId, employeeId, input);
+      const employee = await EmployeeService.updateEmployee(orgId, employeeId, input, req.user.id);
       res.status(200).json(employee);
     } catch (error) {
       next(error);

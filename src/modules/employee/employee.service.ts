@@ -1,10 +1,11 @@
 import crypto from 'crypto';
-import type { Prisma } from '@prisma/client';
+import { ActivityAction, ActivityEntity, type Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import { AppError } from '../../util/errors.js';
 import { hashPassword } from '../../util/password.js';
 import { EmailService } from '../../services/email.service.js';
 import { logger } from '../../config/logger.js';
+import { logActivity } from '../../util/activityLogger.js';
 
 export interface ListEmployeesOptions {
   page?: number;
@@ -398,7 +399,7 @@ export class EmployeeService {
     };
   }
 
-  static async updateEmployee(orgId: string, id: string, input: UpdateEmployeeInput) {
+  static async updateEmployee(orgId: string, id: string, input: UpdateEmployeeInput, actorId?: string) {
     const existing = await this.getEmployeeById(orgId, id);
     const userId = existing.id;
 
@@ -419,6 +420,7 @@ export class EmployeeService {
       }
     }
 
+    let deptName = existing.department?.name ?? null;
     if (input.departmentId) {
       const dept = await prisma.department.findFirst({
         where: { id: input.departmentId, orgId }
@@ -426,14 +428,72 @@ export class EmployeeService {
       if (!dept) {
         throw new AppError('Selected department not found in your organization.', 400, 'INVALID_DEPARTMENT');
       }
+      deptName = dept.name;
     }
 
+    let managerName = existing.manager
+      ? `${existing.manager.firstName} ${existing.manager.lastName ?? ''}`.trim()
+      : null;
     if (input.managerId) {
       const manager = await prisma.user.findFirst({
         where: { id: input.managerId, orgId }
       });
       if (!manager) {
         throw new AppError('Selected reporting manager not found in your organization.', 400, 'INVALID_MANAGER');
+      }
+      managerName = `${manager.firstName} ${manager.lastName ?? ''}`.trim();
+    }
+
+    const stringifyVal = (val: unknown): string => {
+      if (val === null || val === undefined) return '';
+      if (typeof val === 'string') return val.trim();
+      if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+      if (val instanceof Date) return val.toISOString().slice(0, 10);
+      return JSON.stringify(val);
+    };
+
+    const diff: Record<string, { from: unknown; to: unknown; label?: string }> = {};
+    const trackableFields: { key: keyof UpdateEmployeeInput; label: string }[] = [
+      { key: 'firstName', label: 'First Name' },
+      { key: 'lastName', label: 'Last Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'personalEmail', label: 'Personal Email' },
+      { key: 'businessEmail', label: 'Business Email' },
+      { key: 'jobTitle', label: 'Job Title' },
+      { key: 'mobileNumber', label: 'Mobile Number' },
+      { key: 'emergencyContact', label: 'Emergency Contact' },
+      { key: 'address', label: 'Address' },
+      { key: 'adharNumber', label: 'Aadhaar Number' },
+      { key: 'panNumber', label: 'PAN Number' },
+      { key: 'status', label: 'Employment Status' },
+      { key: 'annualPackage', label: 'Annual Package' },
+      { key: 'monthlySalary', label: 'Monthly Salary' },
+      { key: 'departmentId', label: 'Department' },
+      { key: 'managerId', label: 'Reporting Manager' }
+    ];
+
+    for (const { key, label } of trackableFields) {
+      if (input[key] !== undefined) {
+        const oldStr = stringifyVal((existing as Record<string, unknown>)[key]);
+        const newStr = stringifyVal(input[key]);
+        if (oldStr !== newStr) {
+          let fromVal: unknown = (existing as Record<string, unknown>)[key];
+          let toVal: unknown = input[key];
+          if (key === 'departmentId') {
+            fromVal = existing.department?.name ?? fromVal;
+            toVal = deptName ?? toVal;
+          } else if (key === 'managerId') {
+            fromVal = existing.manager
+              ? `${existing.manager.firstName} ${existing.manager.lastName ?? ''}`.trim()
+              : fromVal;
+            toVal = managerName ?? toVal;
+          }
+          diff[key] = {
+            from: fromVal ?? null,
+            to: toVal ?? null,
+            label
+          };
+        }
       }
     }
 
@@ -545,6 +605,30 @@ export class EmployeeService {
         }
       });
     });
+
+    if (Object.keys(diff).length > 0) {
+      const isSelfEdit = Boolean(actorId && actorId === userId);
+      const changedFieldNames = Object.values(diff)
+        .map((d) => d.label ?? '')
+        .filter(Boolean)
+        .join(', ');
+      await logActivity({
+        orgId,
+        actorId: actorId ?? userId,
+        targetId: userId,
+        action: ActivityAction.UPDATE,
+        entity: ActivityEntity.USER,
+        entityId: userId,
+        description: isSelfEdit
+          ? `Self-updated personal details (${changedFieldNames})`
+          : `Updated employee details for ${existing.firstName} ${existing.lastName ?? ''} (${changedFieldNames})`.trim(),
+        metadata: {
+          diff,
+          isSelfEdit,
+          updatedFieldCount: Object.keys(diff).length
+        }
+      });
+    }
 
     const { hashedPassword: _p, ...safe } = updated;
     return safe;

@@ -21,23 +21,10 @@ activityLogRouter.get(
   ActivityLogController.getStats
 );
 
-// GET /api/v2/activity-logs/user/:targetUserId/recent - Recent user activities
+// GET /api/v2/activity-logs/user/:targetUserId/recent - Recent user activities (profile audit history)
 activityLogRouter.get(
   '/user/:targetUserId/recent',
   authenticateAny,
   requireOrgScope(),
   ActivityLogController.getRecentByUser
-);
-
-// Compatibility alias for /user/:userId/recent
-activityLogRouter.get(
-  '/user/:userId/recent',
-  authenticateAny,
-  requireOrgScope(),
-  (req, res, next) => {
-    if (typeof req.params.userId === 'string') {
-      req.params.targetUserId = req.params.userId;
-    }
-    void ActivityLogController.getRecentByUser(req, res, next);
-  }
 );

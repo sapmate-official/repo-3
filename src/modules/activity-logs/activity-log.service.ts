@@ -345,22 +345,31 @@ export const ActivityService = {
       take: limit
     });
 
+    // Return the full shape the frontend EmployeeRevisionHistoryCard expects:
+    // actorId, targetId, metadata (with diff), actor.{id,firstName,lastName,email}
     return activities.map((a) => ({
       id: a.id,
+      orgId: a.orgId,
+      actorId: a.actorId,
+      targetId: a.targetId,
       action: a.action,
       entity: a.entity,
+      entityId: a.entityId,
       description: a.description,
+      metadata: a.metadata,          // ← includes diff, isSelfEdit, updatedFieldCount
       createdAt: a.createdAt,
       actor: {
-        name: resolveName(a.actor.firstName, a.actor.lastName, a.actor.email),
+        id: a.actor.id,
+        firstName: a.actor.firstName,
+        lastName: a.actor.lastName,
         email: a.actor.email,
-        isCurrentUser: a.actorId === targetUserId
       },
       target: a.target
         ? {
-            name: resolveName(a.target.firstName, a.target.lastName, a.target.email),
+            id: a.target.id,
+            firstName: a.target.firstName,
+            lastName: a.target.lastName,
             email: a.target.email,
-            isCurrentUser: a.targetId === targetUserId
           }
         : null
     }));

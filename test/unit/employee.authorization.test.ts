@@ -25,7 +25,8 @@ describe('employee update authorization', () => {
     expect(isSelfIdentifier(current, 'user-2')).toBe(false);
   });
 
-  it('allows self personal fields and strips employment, salary, and status fields', () => {
+  it('allows self personal fields unconditionally (no permission required)', () => {
+    // Personal fields are always allowed for self — no permission key needed
     const input = filterEmployeeUpdateInput(
       {
         firstName: 'Ada',
@@ -35,30 +36,33 @@ describe('employee update authorization', () => {
         departmentId: 'dept-b',
         status: 'inactive'
       },
-      actor(['update_personal_info']),
+      actor([]),           // zero permissions
       true
     );
 
+    // Employment, salary, status stripped — only personal fields pass through
     expect(input).toEqual({
       firstName: 'Ada',
       address: 'New address'
     });
   });
 
-  it('allows self employment and salary fields with their own permissions', () => {
+  it('allows self employment and salary fields WITH their own permissions (plus personal always)', () => {
     const input = filterEmployeeUpdateInput(
       {
         jobTitle: 'Principal Engineer',
         departmentId: 'dept-b',
         annualPackage: 200000,
         monthlySalary: 16666,
-        firstName: 'Ada'
+        firstName: 'Ada'   // personal — always through
       },
       actor(['update_employee_own', 'update_salary_own']),
       true
     );
 
+    // All submitted fields are permitted
     expect(input).toEqual({
+      firstName: 'Ada',
       jobTitle: 'Principal Engineer',
       departmentId: 'dept-b',
       annualPackage: 200000,

@@ -81,21 +81,40 @@ export const getAllowedUpdateFields = (
 
   const allowed = new Set<EmployeeUpdateField>();
 
-  if (!isSelf) {
+  if (isSelf) {
+    // Every employee can always update their own personal info — no permission required.
     addFields(allowed, PERSONAL_FIELDS);
-    addFields(allowed, EMPLOYMENT_SELF_FIELDS);
-    addFields(allowed, SALARY_FIELDS);
-    addFields(allowed, STATUS_FIELDS);
+
+    // Employment fields (jobTitle, dept, manager…) require an explicit permission grant.
+    if (actor.permissions.includes(PERMISSION_KEYS.employeeSelfUpdate)) {
+      addFields(allowed, EMPLOYMENT_SELF_FIELDS);
+    }
+
+    // Salary fields require an explicit permission grant.
+    if (actor.permissions.includes(PERMISSION_KEYS.salarySelfUpdate)) {
+      addFields(allowed, SALARY_FIELDS);
+    }
+
+    // Status / termination requires the "all users" personal update permission.
+    if (actor.permissions.includes(PERMISSION_KEYS.personalAllUpdate)) {
+      addFields(allowed, STATUS_FIELDS);
+    }
+
     if (actor.permissions.includes(PERMISSION_KEYS.roleManage)) {
       allowed.add('roleIds');
     }
+
     return allowed;
   }
 
-  if (actor.permissions.includes(PERMISSION_KEYS.personalSelfUpdate)) {
+  // Non-self edit: requires explicit permission for each category.
+  if (actor.permissions.includes(PERMISSION_KEYS.personalAllUpdate)) {
     addFields(allowed, PERSONAL_FIELDS);
   }
-  if (actor.permissions.includes(PERMISSION_KEYS.employeeSelfUpdate)) {
+  if (
+    actor.permissions.includes(PERMISSION_KEYS.personalAllUpdate) ||
+    actor.permissions.includes(PERMISSION_KEYS.employeeSelfUpdate)
+  ) {
     addFields(allowed, EMPLOYMENT_SELF_FIELDS);
   }
   if (actor.permissions.includes(PERMISSION_KEYS.salarySelfUpdate)) {

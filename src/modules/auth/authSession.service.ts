@@ -19,6 +19,7 @@ import {
 
 const REFRESH_TOKEN_TTL_MS = parseDurationMs(env.REFRESH_TOKEN_TTL);
 const SESSION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const ROTATION_GRACE_PERIOD_MS = 30 * 1000;
 
 export interface SessionMeta {
   ipAddress?: string | null;
@@ -296,6 +297,48 @@ export const rotateUserSession = async (
     throw new AppError('Invalid or expired refresh token.', 401, 'REFRESH_TOKEN_INVALID');
   }
 
+  // Grace period check: if this session was already rotated within grace window (<30s)
+  // and has a replacement, return valid tokens for the active replacement session.
+  if (session.revokedAt) {
+    const isWithinGracePeriod =
+      Date.now() - session.revokedAt.getTime() < ROTATION_GRACE_PERIOD_MS;
+
+    if (isWithinGracePeriod && session.replacedById) {
+      const activeSession = await prisma.authSession.findFirst({
+        where: { familyId: session.familyId, revokedAt: null }
+      });
+
+      if (activeSession && activeSession.expiresAt.getTime() > Date.now()) {
+        const user = await prisma.user.findUnique({
+          where: { id: session.userId },
+          include: { organization: { select: { isActive: true } } }
+        });
+
+        if (user?.status === 'active' && user.organization?.isActive) {
+          logger.info(
+            { sessionId: session.id, activeSessionId: activeSession.id },
+            'Concurrent user refresh token request absorbed within rotation grace period'
+          );
+          return {
+            accessToken: signUserAccessToken({
+              id: user.id,
+              email: user.email,
+              orgId: user.orgId,
+              sid: activeSession.id
+            }),
+            refreshToken: signUserRefreshToken({
+              id: user.id,
+              email: user.email,
+              orgId: user.orgId,
+              sid: activeSession.id,
+              fid: session.familyId
+            })
+          };
+        }
+      }
+    }
+  }
+
   const subject = await verifyUserSessionState(session, decoded);
   const { ipAddress, userAgent } = normalizedMeta(meta);
 
@@ -377,6 +420,46 @@ export const rotateSuperAdminSession = async (
 
   if (!session) {
     throw new AppError('Invalid or expired refresh token.', 401, 'REFRESH_TOKEN_INVALID');
+  }
+
+  // Grace period check: if this session was already rotated within grace window (<30s)
+  // and has a replacement, return valid tokens for the active replacement session.
+  if (session.revokedAt) {
+    const isWithinGracePeriod =
+      Date.now() - session.revokedAt.getTime() < ROTATION_GRACE_PERIOD_MS;
+
+    if (isWithinGracePeriod && session.replacedById) {
+      const activeSession = await prisma.superAdminAuthSession.findFirst({
+        where: { familyId: session.familyId, revokedAt: null }
+      });
+
+      if (activeSession && activeSession.expiresAt.getTime() > Date.now()) {
+        const superAdmin = await prisma.superAdmin.findUnique({
+          where: { id: session.superAdminId },
+          select: { id: true, email: true }
+        });
+
+        if (superAdmin) {
+          logger.info(
+            { sessionId: session.id, activeSessionId: activeSession.id },
+            'Concurrent super-admin refresh token request absorbed within rotation grace period'
+          );
+          return {
+            accessToken: signSuperAdminAccessToken({
+              id: superAdmin.id,
+              email: superAdmin.email,
+              sid: activeSession.id
+            }),
+            refreshToken: signSuperAdminRefreshToken({
+              id: superAdmin.id,
+              email: superAdmin.email,
+              sid: activeSession.id,
+              fid: session.familyId
+            })
+          };
+        }
+      }
+    }
   }
 
   const subject = await verifySuperAdminSessionState(session, decoded);

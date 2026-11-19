@@ -31,8 +31,14 @@ export const createApp = (): Express => {
   }
 
   // 1. Security Headers
+  const helmetMiddleware = (
+    typeof helmet === 'function'
+      ? helmet
+      : (helmet as unknown as { default: typeof helmet }).default
+  ) as unknown as (options?: Record<string, unknown>) => express.RequestHandler;
+
   app.use(
-    helmet({
+    helmetMiddleware({
       contentSecurityPolicy: env.NODE_ENV === 'production',
       crossOriginEmbedderPolicy: false
     })

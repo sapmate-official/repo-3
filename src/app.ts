@@ -2,7 +2,7 @@ import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { env, getAllowedOrigins } from './config/env.js';
+import { env, getAllowedOrigins, isOriginAllowed } from './config/env.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { requireTrustedOrigin } from './middleware/trustedOrigin.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -43,7 +43,7 @@ export const createApp = (): Express => {
   app.use(
     cors({
       origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || isOriginAllowed(origin, allowedOrigins)) {
           callback(null, true);
           return;
         }

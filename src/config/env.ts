@@ -79,3 +79,23 @@ export const getAllowedOrigins = (): string[] =>
   env.CORS_ORIGINS.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+
+export const isOriginAllowed = (origin: string, allowedOrigins: string[]): boolean => {
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    return true;
+  }
+  try {
+    const url = new URL(origin);
+    return allowedOrigins.some((allowed) => {
+      if (allowed.startsWith('*.')) {
+        return url.hostname.endsWith(allowed.slice(1)) || url.hostname === allowed.slice(2);
+      }
+      if (allowed.includes('vercel.app')) {
+        return url.hostname.endsWith('.vercel.app');
+      }
+      return false;
+    });
+  } catch {
+    return false;
+  }
+};

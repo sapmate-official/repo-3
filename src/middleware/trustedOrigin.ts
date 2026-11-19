@@ -1,5 +1,5 @@
 import { type NextFunction, type Request, type Response } from 'express';
-import { getAllowedOrigins } from '../config/env.js';
+import { getAllowedOrigins, isOriginAllowed } from '../config/env.js';
 import { AppError } from '../util/errors.js';
 
 export const requireTrustedOrigin = (
@@ -13,7 +13,7 @@ export const requireTrustedOrigin = (
     return;
   }
 
-  if (getAllowedOrigins().includes(origin)) {
+  if (isOriginAllowed(origin, getAllowedOrigins())) {
     next();
     return;
   }

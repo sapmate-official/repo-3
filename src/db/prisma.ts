@@ -36,8 +36,6 @@ prisma.$on('warn' as never, (e: unknown) => {
   logger.warn({ err: e }, 'Prisma Client Warning');
 });
 
-if (env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
 
 export default prisma;

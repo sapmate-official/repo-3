@@ -20,7 +20,9 @@ const PERSONAL_FIELDS = [
   'dateOfBirth',
   'address',
   'adharNumber',
-  'panNumber'
+  'panNumber',
+  'countryOfCompany',
+  'market'
 ] as const;
 
 const EMPLOYMENT_SELF_FIELDS = [
@@ -29,7 +31,9 @@ const EMPLOYMENT_SELF_FIELDS = [
   'hiredDate',
   'employeeId',
   'departmentId',
-  'managerId'
+  'managerId',
+  'countryOfCompany',
+  'market'
 ] as const;
 
 const SALARY_FIELDS = [

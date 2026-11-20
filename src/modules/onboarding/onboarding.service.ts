@@ -21,6 +21,8 @@ export interface CandidateFormData extends Record<string, unknown> {
   address?: string | null;
   adharNumber?: string | null;
   panNumber?: string | null;
+  countryOfCompany?: string | null;
+  market?: string | null;
   submittedAt?: string;
   bankDetails?: {
     accountHolderName?: string;
@@ -42,6 +44,8 @@ export interface CandidateFormData extends Record<string, unknown> {
     jobTitle?: string | null;
     annualPackage?: number;
     monthlySalary?: number;
+    countryOfCompany?: string | null;
+    market?: string | null;
     approvedAt?: string;
     approvedBy?: string;
   };
@@ -210,6 +214,8 @@ export class OnboardingService {
         annualPackage,
         monthlySalary,
         hiredDate: input.hiredDate ? new Date(input.hiredDate) : null,
+        countryOfCompany: input.countryOfCompany ?? null,
+        market: input.market ?? null,
         status: 'INVITED',
         verificationToken,
         tokenExpiry,
@@ -348,7 +354,9 @@ export class OnboardingService {
         status: 'FORM_SUBMITTED',
         firstName: formData.firstName ?? candidate.firstName,
         lastName: formData.lastName ?? candidate.lastName,
-        mobileNumber: formData.mobileNumber ?? candidate.mobileNumber
+        mobileNumber: formData.mobileNumber ?? candidate.mobileNumber,
+        countryOfCompany: formData.countryOfCompany !== undefined ? formData.countryOfCompany : candidate.countryOfCompany,
+        market: formData.market !== undefined ? formData.market : candidate.market
       }
     });
   }
@@ -543,6 +551,8 @@ export class OnboardingService {
           adharNumber: formData.adharNumber ?? null,
           panNumber: formData.panNumber ?? null,
           emergencyContact: formData.emergencyContact ?? null,
+          countryOfCompany: input.countryOfCompany ?? approvalData.countryOfCompany ?? candidate.countryOfCompany ?? (formData.countryOfCompany as string | null | undefined) ?? null,
+          market: input.market ?? approvalData.market ?? candidate.market ?? (formData.market as string | null | undefined) ?? null,
           employeeId,
           departmentId: departmentId ?? null,
           managerId: managerId ?? null,
@@ -653,7 +663,9 @@ export class OnboardingService {
           annualPackage: candidate.annualPackage,
           hiredDate: candidate.hiredDate,
           departmentId: candidate.departmentId,
-          department: candidate.department
+          department: candidate.department,
+          countryOfCompany: candidate.countryOfCompany,
+          market: candidate.market
         },
         submittedData: {
           personalInfo: {
@@ -664,7 +676,9 @@ export class OnboardingService {
             dateOfBirth: formData.dateOfBirth,
             address: formData.address,
             adharNumber: formData.adharNumber,
-            panNumber: formData.panNumber
+            panNumber: formData.panNumber,
+            countryOfCompany: (formData.countryOfCompany as string | undefined) ?? candidate.countryOfCompany,
+            market: (formData.market as string | undefined) ?? candidate.market
           },
           bankDetails: formData.bankDetails ?? {},
           documents: formData.documents ?? {},
@@ -715,6 +729,8 @@ export class OnboardingService {
         departmentId: data.departmentId !== undefined ? data.departmentId : candidate.departmentId,
         annualPackage: data.annualPackage !== undefined ? Number(data.annualPackage) : candidate.annualPackage,
         hiredDate: data.hiredDate ? new Date(data.hiredDate) : candidate.hiredDate,
+        countryOfCompany: data.countryOfCompany !== undefined ? data.countryOfCompany : candidate.countryOfCompany,
+        market: data.market !== undefined ? data.market : candidate.market,
         formData: { ...updatedFormData } as unknown as Prisma.InputJsonValue
       },
       include: {

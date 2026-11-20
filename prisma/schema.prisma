@@ -230,6 +230,8 @@ model User {
   adharNumber                  String?
   panNumber                    String?
   mobileNumber                 String?
+  countryOfCompany             String?
+  market                       String?
   createdAt                    DateTime              @default(now())
   updatedAt                    DateTime              @updatedAt
   employeeId                   String                @unique @default(cuid())
@@ -653,6 +655,8 @@ model OnboardingCandidate {
   firstName         String
   lastName          String?
   mobileNumber      String?
+  countryOfCompany  String?
+  market            String?
   status            OnboardingStatus @default(INVITED)
   formData          Json?
   verificationToken String?

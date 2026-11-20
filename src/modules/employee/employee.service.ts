@@ -49,6 +49,8 @@ export interface CreateEmployeeInput {
   pfPercentage?: number;
   taxPercentage?: number;
   insuranceFixed?: number;
+  countryOfCompany?: string | null;
+  market?: string | null;
 }
 
 export interface UpdateEmployeeInput extends Partial<CreateEmployeeInput> {
@@ -319,6 +321,8 @@ export class EmployeeService {
           annualPackage,
           monthlySalary,
           status: 'active',
+          countryOfCompany: input.countryOfCompany ?? null,
+          market: input.market ?? null,
           roles: {
             create: roles.map((r) => ({
               role: { connect: { id: r.id } }
@@ -465,6 +469,8 @@ export class EmployeeService {
       { key: 'address', label: 'Address' },
       { key: 'adharNumber', label: 'Aadhaar Number' },
       { key: 'panNumber', label: 'PAN Number' },
+      { key: 'countryOfCompany', label: 'Company Country' },
+      { key: 'market', label: 'Market' },
       { key: 'status', label: 'Employment Status' },
       { key: 'annualPackage', label: 'Annual Package' },
       { key: 'monthlySalary', label: 'Monthly Salary' },
@@ -594,6 +600,8 @@ export class EmployeeService {
           ...(input.managerId !== undefined ? { managerId: input.managerId } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.terminationDate !== undefined ? { terminationDate: input.terminationDate ? new Date(input.terminationDate) : null } : {}),
+          ...(input.countryOfCompany !== undefined ? { countryOfCompany: input.countryOfCompany ?? null } : {}),
+          ...(input.market !== undefined ? { market: input.market ?? null } : {}),
           ...(annualPackage !== undefined ? { annualPackage } : {}),
           ...(monthlySalary !== undefined ? { monthlySalary } : {})
         },

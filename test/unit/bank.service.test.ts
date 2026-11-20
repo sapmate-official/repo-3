@@ -61,6 +61,8 @@ describe('BankService', () => {
     address: null,
     adharNumber: null,
     panNumber: null,
+    countryOfCompany: null,
+    market: null,
     employeeId: 'EMP001',
     departmentId: null,
     managerId: null,

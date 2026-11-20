@@ -50,7 +50,9 @@ export const createEmployeeSchema = z.object({
   taPercentage: z.coerce.number().min(0).max(100).optional().default(10),
   pfPercentage: z.coerce.number().min(0).max(100).optional().default(12),
   taxPercentage: z.coerce.number().min(0).max(100).optional().default(10),
-  insuranceFixed: z.coerce.number().nonnegative().optional().default(1000)
+  insuranceFixed: z.coerce.number().nonnegative().optional().default(1000),
+  countryOfCompany: z.string().trim().max(100).optional().nullable(),
+  market: z.string().trim().max(100).optional().nullable()
 });
 
 export const updateEmployeeSchema = z.object({
@@ -85,7 +87,9 @@ export const updateEmployeeSchema = z.object({
   taxPercentage: z.coerce.number().min(0).max(100).optional(),
   insuranceFixed: z.coerce.number().nonnegative().optional(),
   status: z.enum(['active', 'inactive']).optional(),
-  terminationDate: dateStringSchema.optional().nullable()
+  terminationDate: dateStringSchema.optional().nullable(),
+  countryOfCompany: z.string().trim().max(100).optional().nullable(),
+  market: z.string().trim().max(100).optional().nullable()
 });
 
 export const employeeIdParamSchema = z.object({

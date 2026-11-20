@@ -13,6 +13,8 @@ export const createCandidateSchema = z.object({
   annualPackage: z.coerce.number().nonnegative().optional().nullable(),
   monthlySalary: z.coerce.number().nonnegative().optional().nullable(),
   hiredDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}/)).optional().nullable(),
+  countryOfCompany: z.string().trim().max(100).optional().nullable(),
+  market: z.string().trim().max(100).optional().nullable(),
   orgId: z.string().trim().optional()
 });
 
@@ -26,6 +28,8 @@ export const submitCandidateFormSchema = z.object({
   panNumber: z.string().trim().optional().nullable(),
   adharNumber: z.string().trim().optional().nullable(),
   jobTitle: z.string().trim().optional().nullable(),
+  countryOfCompany: z.string().trim().max(100).optional().nullable(),
+  market: z.string().trim().max(100).optional().nullable(),
   bankDetails: z
     .object({
       accountHolderName: z.string().trim().optional(),
@@ -62,7 +66,9 @@ export const completeOnboardingSchema = z.object({
   businessEmail: z.string().trim().email().optional().nullable(),
   jobTitle: z.string().trim().max(100).optional().nullable(),
   annualPackage: z.coerce.number().nonnegative().optional().nullable(),
-  monthlySalary: z.coerce.number().nonnegative().optional().nullable()
+  monthlySalary: z.coerce.number().nonnegative().optional().nullable(),
+  countryOfCompany: z.string().trim().max(100).optional().nullable(),
+  market: z.string().trim().max(100).optional().nullable()
 });
 
 export const candidateIdParamSchema = z.object({

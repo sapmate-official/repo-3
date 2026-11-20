@@ -490,7 +490,27 @@ export class PayrollCompatController {
               halfDays: 0,
               absentDays: p.lopDays,
               paidLeaveDays: 0,
-              unpaidLeaveDays: p.lopDays
+              unpaidLeaveDays: p.lopDays,
+              attendancePercentage: p.workingDays > 0 ? Number(((p.presentDays / p.workingDays) * 100).toFixed(2)) : 0
+            },
+            comparisons: {
+              earningsRatio: (basicSalary > 0 ? basicSalary : p.grossEarnings) > 0
+                ? Number(((p.netPay / (basicSalary > 0 ? basicSalary : p.grossEarnings)) * 100).toFixed(2))
+                : 100,
+              previousMonth: null,
+              yearToDateEarnings: p.netPay
+            },
+            visualData: {
+              earningsVsDeductions: {
+                earnings: p.grossEarnings,
+                deductions: p.totalDeductions
+              },
+              salaryComponents: {
+                basic: basicSalary > 0 ? basicSalary : p.grossEarnings,
+                allowances: p.grossEarnings - basicSalary,
+                deductions: p.totalDeductions,
+                net: p.netPay
+              }
             }
           }
         });
@@ -561,7 +581,25 @@ export class PayrollCompatController {
             halfDays: 0,
             absentDays: 0,
             paidLeaveDays: 0,
-            unpaidLeaveDays: 0
+            unpaidLeaveDays: 0,
+            attendancePercentage: 100
+          },
+          comparisons: {
+            earningsRatio: legacy.basicSalary > 0 ? Number(((legacy.netSalary / legacy.basicSalary) * 100).toFixed(2)) : 100,
+            previousMonth: null,
+            yearToDateEarnings: legacy.netSalary
+          },
+          visualData: {
+            earningsVsDeductions: {
+              earnings: legacy.basicSalary,
+              deductions: 0
+            },
+            salaryComponents: {
+              basic: legacy.basicSalary,
+              allowances: 0,
+              deductions: 0,
+              net: legacy.netSalary
+            }
           }
         }
       });
